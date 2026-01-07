@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>iStudy - Student Essay Review System</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@400;600;800&display=swap"
+        rel="stylesheet">
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/framer-motion@10.16.4/dist/framer-motion.js"></script>
+    <script src="https://unpkg.com/react-markdown@8.0.7/react-markdown.min.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+</head>
+
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+        const { motion, AnimatePresence } = window.Motion || { motion: (p) => <div {...p} />, AnimatePresence: (p) => p.children };
+        const ReactMarkdown = window.ReactMarkdown?.default || window.ReactMarkdown;
+
+        // Core and Fetch Logic
+        window.Core = window.Core || {
+            UploadFile: async (file) => {
+                console.log("Processing file:", file.name);
+                return { fileId: "mock-" + Date.now(), fileName: file.name };
+            },
+            FetchChapterData: async (chapterNum) => {
+                const paddedChapter = chapterNum.toString().padStart(2, '0');
+                const questionsUrl = `https://raw.githack.com/Camilo-Mora/GEO309/main/main/ExamQuestions_${paddedChapter}.xlsx`;
+                const transcriptUrl = `https://raw.githack.com/Camilo-Mora/GEO309/main/main/Transcript_Lecture_${paddedChapter}.txt`;
+
+                try {
+                    const qRes = await fetch(questionsUrl);
+                    if (!qRes.ok) throw new Error(`Questions for Chapter ${paddedChapter} not found.`);
+                    const qBuffer = await qRes.arrayBuffer();
+                    const qData = new Uint8Array(qBuffer);
+                    const workbook = XLSX.read(qData, { type: 'array' });
+                    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+
+                    const rawRows = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+                    const tRes = await fetch(transcriptUrl);
+                    let transcript = "No transcript available.";
+                    if (tRes.ok) {
+                        transcript = await tRes.text();
+                    }
+
+                    return {
+                        questions: rawRows
+                            .filter(row => row && row.length >= 2 && row[1] && row[1].toString().trim().length > 0)
+                            .map((row) => ({
+                                question_number: row[0] || "N/A",
+                                question_text: row[1].toString().trim(),
+                            })),
+                        transcript: transcript
+                    };
+                } catch (err) {
+                    console.error("Fetch Error:", err);
+                    throw err;
+                }
+            },
+            ExtractDataFromUploadedFile: async (file) => {
+                try {
+                    const worker = await Tesseract.createWorker('eng', 1);
+                    const { data: { text } } = await worker.recognize(file);
+                    await worker.terminate();
+
+                    const lines = text.split('\n').filter(l => l.trim().length > 5);
+
+                    return {
+                        detected_chapter: null,
+                        full_text: text,
+                        transcribed_responses: lines
+                    };
+                } catch (err) {
+                    console.error("OCR Error:", err);
+                    throw new Error("Failed to read text from image.");
+                }
+            }
+        };
+
+        window.InvokeLLM = async (prompt, context = {}) => {
+            const key = localStorage.getItem('google_api_key');
+            if (!key) {
+                return "System📚: No API Key found. Please click the ⚙️ icon to set your Google AI API Key.";
+            }
+
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`;
+
+            const systemContext = `
+                You are playing a role in an educational system for a Biogeography course.
+                Your task is to respond as an AI character to a student's response.
+                
+                Course Data:
+                - Lecture Transcript: ${context.transcript || 'Not available'}
+                - The Question: ${context.question || 'Not available'}
+                - Student's Transcribed Response: ${context.student_response || 'Not available'}
+
+                Character/Instruction: ${prompt}
+                
+                Please keep your response academic yet engaging, and stay strictly within the context of the course transcript provided.
+            `;
+
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: systemContext }] }]
+                    })
+                });
+
+                const data = await response.json();
+                if (data.error) throw new Error(data.error.message);
+
+                return data.candidates[0].content.parts[0].text;
+            } catch (err) {
+                console.error("Gemini API Error:", err);
+                const msg = err.message || "";
+                if (msg.toLowerCase().includes("quota") || msg.toLowerCase().includes("limit") || msg.toLowerCase().includes("429")) {
+                    return "System📚: ⚠️ **Quota Limit Reached!** You have reached your Google API limit. \n\n**What to do:** \n1. Wait for it to reset (usually 15-60 minutes). \n2. OR, generate a new API key using a **different personal Gmail account** and update it via the ⚙️ icon. \n3. OR, ensure you aren't using your UH email (which doesn't support API keys).";
+                }
+                return `System📚: Error calling Gemini AI. Check your API key or connection. Details: ${msg}`;
+            }
+        };
+
+        const characters = {
+            newton: { name: "Newton", emoji: "🧠", avatarClass: "avatar-newton" },
+            tontin: { name: "Tontin", emoji: "🤔", avatarClass: "avatar-tontin" },
+            pinocchio: { name: "Pinocchio", emoji: "🤥", avatarClass: "avatar-pinocchio" },
+            system: { name: "System", emoji: "📚", avatarClass: "avatar-system" },
+            user: { name: "Student", emoji: "👤", avatarClass: "" }
+        };
+
+        function App() {
+            const [showSettings, setShowSettings] = React.useState(false);
+            const [apiKey, setApiKey] = React.useState('');
+            const [tempKey, setTempKey] = React.useState('');
+            const [email1, setEmail1] = useState('');
+            const [email2, setEmail2] = useState('');
+            const [isEditing, setIsEditing] = useState(false);
+            const [view, setView] = useState('landing');
+            const [messages, setMessages] = useState([]);
+            const [inputValue, setInputValue] = useState('');
+            const [isProcessing, setIsProcessing] = useState(false);
+            const [currentQIndex, setCurrentQIndex] = useState(0);
+            const [reviewStep, setReviewStep] = useState(0);
+
+            const [submission, setSubmission] = useState({
+                student_email: '',
+                chapter: '',
+                questions: [],
+                transcript: '',
+                status: 'in_progress'
+            });
+
+            const chatScrollRef = useRef(null);
+            const fileInputRef = useRef(null);
+
+            useEffect(() => {
+                if (chatScrollRef.current) {
+                    chatScrollRef.current.scrollTo({ top: chatScrollRef.current.scrollHeight, behavior: 'smooth' });
+                }
+            }, [messages]);
+
+            const addMessage = (charKey, text, type = 'text') => {
+                setMessages(prev => [...prev, {
+                    id: Math.random(),
+                    charKey,
+                    text: text,
+                    type: type,
+                    isAi: charKey !== 'user'
+                }]);
+            };
+
+            const handleUploadClick = () => {
+                if (!apiKey) {
+                    setShowSettings(true);
+                    return;
+                }
+                fileInputRef.current.click();
+            };
+
+            const handleFileChange = async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                setView('chat');
+                setIsProcessing(true);
+                addMessage('system', `Hello! File **${file.name}** received. I am extracting your handwriting now...`);
+
+                try {
+                    const extraction = await window.Core.ExtractDataFromUploadedFile(file);
+                    addMessage('system', "### Extracted Text:\n" + extraction.full_text);
+                    window.lastTranscribed = extraction.transcribed_responses;
+
+                    if (extraction.detected_chapter) {
+                        handleChapterSelected(extraction.detected_chapter);
+                    } else {
+                        addMessage('system', "Handwriting extraction complete! However, I couldn't find a chapter number in your notes. **Which chapter is this for?** (e.g., 1)");
+                    }
+                } catch (err) {
+                    addMessage('system', "Error processing file: " + err.message);
+                } finally {
+                    setIsProcessing(false);
+                }
+            };
+
+            const handleChapterSelected = async (chapterNum) => {
+                setIsProcessing(true);
+                addMessage('system', `Fetching materials for Chapter **${chapterNum}**...`);
+                try {
+                    const data = await window.Core.FetchChapterData(chapterNum);
+                    const matchedQuestions = data.questions.map((q, idx) => ({
+                        ...q,
+                        student_response: window.lastTranscribed?.[idx] || "No response found.",
+                        original_response: window.lastTranscribed?.[idx] || "No response found.",
+                        final_response: window.lastTranscribed?.[idx] || "No response found."
+                    }));
+
+                    setSubmission(prev => ({
+                        ...prev,
+                        chapter: chapterNum,
+                        questions: matchedQuestions,
+                        transcript: data.transcript
+                    }));
+
+                    const transcriptPreview = data.transcript.substring(0, 250) + "...";
+                    addMessage('system', `### Transcript Preview:\n${transcriptPreview}`);
+
+                    if (matchedQuestions.length > 0) {
+                        const Q1 = matchedQuestions[0].question_text;
+                        const Q2 = matchedQuestions[1] ? matchedQuestions[1].question_text : "...";
+                        addMessage('system', `### Questions Preview:\n1. ${Q1}\n2. ${Q2}`);
+                    }
+
+                    addMessage('system', `Loaded **${data.questions.length} questions**. \n\nBefore we compile the final report, each of your responses will be reviewed by three agents:\n\n1. **Newton🧠**: Newton will check your response against the course material, provide a score (1-5), and offer suggestions for improvement.\n2. **Tontin🤔**: Tontin is new to this and will ask you to explain your logic in simpler terms.\n3. **Pinocchio🤥**: Watch out! Pinocchio might try to trick you with fake information to see if you can spot it.\n\nOnce all questions are reviewed, we will generate the final report for Dr. Mora.`);
+
+                    setTimeout(() => startReview(0, 0), 4000);
+                } catch (err) {
+                    addMessage('system', "Error loading chapter materials: " + err.message);
+                } finally {
+                    setIsProcessing(false);
+                }
+            };
+
+            const startReview = async (qIdx, step) => {
+                runNextStep(qIdx, step);
+            };
+
+            const runNextStep = async (qIdx, step, studentMsg = "") => {
+                const q = submission.questions[qIdx];
+                if (!q) {
+                    addMessage('system', "All questions reviewed! Type **'compile'** to generate your final report for Dr. Mora.");
+                    return;
+                }
+
+                if (studentMsg) {
+                    setSubmission(prev => {
+                        const newQs = [...prev.questions];
+                        newQs[qIdx] = { ...newQs[qIdx], final_response: studentMsg };
+                        return { ...prev, questions: newQs };
+                    });
+                }
+
+                if (step === 0) { // Newton
+                    setIsProcessing(true);
+                    const responseToReview = studentMsg || q.final_response || q.student_response;
+                    const res = await window.InvokeLLM(`Newton🧠: Review this improved response for Q${q.question_number}: ${responseToReview}`);
+                    addMessage('newton', res);
+                    setIsProcessing(false);
+
+                    if (isEditing) {
+                        setTimeout(() => {
+                            addMessage('system', "I hope that update was helpful. **Ready to see the final report again?** (Yes/No)");
+                        }, 1000);
+                    } else {
+                        setReviewStep(1);
+                        setTimeout(() => addMessage('tontin', "Tontin 🤔: That sounds fancy! But I'm a bit slow... could you explain why that's true in simpler terms?"), 1000);
+                    }
+                } else if (step === 1) { // Tontin response
+                    setReviewStep(2);
+                    setTimeout(() => addMessage('pinocchio', "Pinocchio 🤥: Oh, I get it now! You're saying that the ancestors of these animals actually built boats and sailed across the ocean, right? That's what you meant?"), 1000);
+                } else if (step === 2) { // Pinocchio response
+                    setCurrentQIndex(qIdx + 1);
+                    setReviewStep(0);
+                    setTimeout(() => runNextStep(qIdx + 1, 0), 1000);
+                }
+            };
+
+            const handleSend = async () => {
+                if (!inputValue.trim() || isProcessing) return;
+                const text = inputValue.trim();
+                setInputValue('');
+                addMessage('user', text);
+
+                if (isEditing && (text.toLowerCase().includes('yes') || text.toLowerCase().includes('report') || text.toLowerCase().includes('ok'))) {
+                    setIsEditing(false);
+                    addMessage('system', 'Generating your report...', 'report');
+                    return;
+                }
+
+                if (!submission.chapter) {
+                    handleChapterSelected(text);
+                    return;
+                }
+
+                if (text.toLowerCase() === 'compile' || text.toLowerCase() === 'report') {
+                    addMessage('system', 'Generating your report...', 'report');
+                    return;
+                }
+
+                runNextStep(currentQIndex, reviewStep, text);
+            };
+
+            const generateReportData = () => {
+                const content = `ISTUDY REPORT - CHAPTER ${submission.chapter}\n` +
+                    `STUDENT ID: ${email1}\n` +
+                    `------------------------------------------\n\n` +
+                    submission.questions.map(q => `QUESTION ${q.question_number}: ${q.question_text}\nRESPONSE: ${q.final_response}\n`).join('\n---\n');
+                const chNum = (submission.chapter || '0').toString().padStart(2, '0');
+                const fileName = `Report_Chapter_${chNum}.txt`;
+                return {
+                    uri: 'data:text/plain;charset=utf-8,' + encodeURIComponent("\ufeff" + content),
+                    fileName
+                };
+            };
+
+            const handleSaveKey = () => {
+                localStorage.setItem('google_api_key', tempKey);
+                setApiKey(tempKey);
+                setShowSettings(false);
+                addMessage('system', "✅ API Key saved successfully.");
+            };
+
+            // Load saved key on mount
+            React.useEffect(() => {
+                const savedKey = localStorage.getItem('google_api_key');
+                if (savedKey) {
+                    setApiKey(savedKey);
+                    setTempKey(savedKey);
+                }
+            }, []);
+
+            return (
+                <div className="app-root">
+                    <header>
+                        <div className="logo">IStudy</div>
+                        <div className="settings-icon" onClick={() => setShowSettings(true)}>
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <circle cx="12" cy="12" r="3"></circle>
+                                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                            </svg>
+                        </div>
+                    </header>
+                    <main className="container">
+                        <AnimatePresence mode="wait">
+                            {view === 'landing' && (
+                                <motion.div
+                                    key="landing"
+                                    initial={{ opacity: 0, y: 20 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, scale: 0.95 }}
+                                    className="landing-content"
+                                >
+                                    <video className="title-image" autoPlay loop muted playsInline>
+                                        <source src="istudy-landing-video.mp4" type="video/mp4" />
+                                    </video>
+
+                                    <button className="main-upload-btn" onClick={handleUploadClick}>
+                                        <span className="btn-icon">
+                                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+                                                <circle cx="12" cy="13" r="4"></circle>
+                                            </svg>
+                                        </span> Upload Response Sheet
+                                    </button>
+                                    <input type="file" id="fileInput" ref={fileInputRef} style={{ display: 'none' }} onChange={handleFileChange} accept="image/*" />
+
+
+
+
+                                </motion.div>
+                            )}
+                            {view === 'chat' && (
+                                <motion.div
+                                    key="chat"
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    className="chat-container active"
+                                    ref={chatScrollRef}
+                                >
+                                    <video className="title-image image-shrunken" autoPlay loop muted playsInline>
+                                        <source src="istudy-landing-video.mp4" type="video/mp4" />
+                                    </video>
+                                    <div className="messages-list">
+                                        <AnimatePresence initial={false}>
+                                            {messages.map((msg) => (
+                                                <motion.div
+                                                    key={msg.id}
+                                                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                                                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                                                    className={`message-wrapper ${msg.isAi ? 'message-ai' : 'message-user'}`}
+                                                >
+                                                    <div className={`avatar ${characters[msg.charKey]?.avatarClass || ''}`}>
+                                                        {characters[msg.charKey]?.emoji || '👤'}
+                                                    </div>
+                                                    <div className="message-bubble">
+                                                        {msg.type === 'report' ? (
+                                                            <div className="report-chat-card">
+                                                                <h3>Final Study Report - Chapter {submission.chapter}</h3>
+                                                                <div className="report-list-mini">
+                                                                    {submission.questions.map((q, qIdx) => (
+                                                                        <div key={qIdx} className="report-item-mini">
+                                                                            <p><strong>Q{q.question_number}:</strong> {q.question_text}</p>
+                                                                            <p className="response-preview"><em>Response:</em> {q.final_response}</p>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+
+                                                                <div className="report-actions-mini">
+                                                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '15px' }}>
+                                                                        <div className="api-input-group">
+                                                                            <label>Email</label>
+                                                                            <input type="email" placeholder="Email" value={email1} onChange={(e) => setEmail1(e.target.value)} style={{ fontSize: '12px' }} />
+                                                                        </div>
+                                                                        <div className="api-input-group">
+                                                                            <label>Confirm</label>
+                                                                            <input type="email" placeholder="Email" value={email2} onChange={(e) => setEmail2(e.target.value)} style={{ fontSize: '12px' }} />
+                                                                        </div>
+                                                                    </div>
+
+                                                                    <button className="btn-secondary" style={{ width: '100%', marginBottom: '10px' }} onClick={() => {
+                                                                        const id = prompt("Which question number would you like to edit?");
+                                                                        const idx = submission.questions.findIndex(q => q.question_number.toString() === id);
+                                                                        if (idx !== -1) {
+                                                                            setIsEditing(true);
+                                                                            setCurrentQIndex(idx);
+                                                                            setReviewStep(0);
+                                                                            addMessage('system', `### Editing Question ${id}\n**${submission.questions[idx].question_text}**\n\nPlease enter your improved response below:`);
+                                                                        } else {
+                                                                            alert("Question not found.");
+                                                                        }
+                                                                    }}>Edit a Response</button>
+
+                                                                    {(() => {
+                                                                        const r = generateReportData();
+                                                                        const canSubmit = email1 && email1 === email2 && email1.includes('@');
+                                                                        return (
+                                                                            <a
+                                                                                href={canSubmit ? r.uri : "javascript:void(0)"}
+                                                                                download={canSubmit ? r.fileName : undefined}
+                                                                                className={`btn-primary ${!canSubmit ? 'disabled' : ''}`}
+                                                                                style={{
+                                                                                    textDecoration: 'none',
+                                                                                    textAlign: 'center',
+                                                                                    display: 'block',
+                                                                                    width: '100%',
+                                                                                    boxSizing: 'border-box',
+                                                                                    opacity: canSubmit ? 1 : 0.5,
+                                                                                    cursor: canSubmit ? 'pointer' : 'not-allowed',
+                                                                                    pointerEvents: canSubmit ? 'auto' : 'none'
+                                                                                }}
+                                                                                onClick={async (e) => {
+                                                                                    if (!canSubmit) {
+                                                                                        e.preventDefault();
+                                                                                        return;
+                                                                                    }
+                                                                                    setIsProcessing(true);
+                                                                                    try {
+                                                                                        await fetch('https://script.google.com/macros/s/AKfycbyBFxUo5yRhLvCx7_kiFacBah0C3KK0jTSif0_Yw-wG7dfnYgOqSav8dw_CSPoUojPllw/exec', {
+                                                                                            method: 'POST',
+                                                                                            mode: 'no-cors',
+                                                                                            body: JSON.stringify({
+                                                                                                studentId: email1,
+                                                                                                chapter: `Chapter${submission.chapter}`
+                                                                                            })
+                                                                                        });
+                                                                                        setTimeout(() => setView('completion'), 1500);
+                                                                                    } catch (err) {
+                                                                                        setView('completion');
+                                                                                    } finally {
+                                                                                        setIsProcessing(false);
+                                                                                    }
+                                                                                }}
+                                                                            >
+                                                                                Approve & Submit
+                                                                            </a>
+                                                                        );
+                                                                    })()}
+                                                                </div>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="markdown-content">
+                                                                <ReactMarkdown>{msg.text}</ReactMarkdown>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </motion.div>
+                                            ))}
+                                        </AnimatePresence>
+                                        {isProcessing && (
+                                            <div className="message-wrapper message-ai">
+                                                <div className="avatar avatar-system">📚</div>
+                                                <div className="message-bubble">
+                                                    <div className="loading-spinner"></div>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </motion.div>
+                            )}
+                            {view === 'completion' && (
+                                <motion.div
+                                    key="completion"
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    className="completion-overlay active"
+                                >
+                                    <div className="success-icon">✓</div>
+                                    <h2>Chapter Complete!</h2>
+                                    <p>
+                                        You have successfully completed **Chapter {submission.chapter}**. <br />
+                                        Your responses have been saved to your local machine, and Dr. Mora has been notified.
+                                    </p>
+                                    <button className="btn-primary" onClick={() => window.location.reload()}>
+                                        Close App
+                                    </button>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+                    </main>
+                    {
+                        view === 'chat' && (
+                            <div className="input-fixed-container">
+                                <div className="input-box-wrapper">
+                                    <button className="action-btn" onClick={() => fileInputRef.current.click()}>+</button>
+                                    <input
+                                        className="input-box"
+                                        placeholder={isProcessing ? "Processing..." : "Type your response..."}
+                                        value={inputValue}
+                                        onChange={(e) => setInputValue(e.target.value)}
+                                        onKeyPress={(e) => e.key === 'Enter' && handleSend()}
+                                        disabled={isProcessing}
+                                    />
+                                    <button className="action-btn send-btn" onClick={handleSend} disabled={isProcessing}>➤</button>
+                                </div>
+                            </div>
+                        )
+                    }
+                    {showSettings && (
+                        <div className="settings-overlay" onClick={() => setShowSettings(false)}>
+                            <div className="settings-modal" onClick={(e) => e.stopPropagation()}>
+                                <h2>Google AI Settings</h2>
+                                <p>This application requires a Google AI API key to function. Your key is stored locally in your browser and is never sent to our servers.</p>
+
+                                <div className="api-input-group">
+                                    <label>Google API Key</label>
+                                    <input
+                                        type="password"
+                                        placeholder="Paste your key here..."
+                                        value={tempKey}
+                                        onChange={(e) => setTempKey(e.target.value)}
+                                    />
+                                </div>
+
+                                <div className="instructions" style={{ maxHeight: '250px', overflowY: 'auto', marginBottom: '20px', paddingRight: '10px' }}>
+                                    <p style={{ fontWeight: '600', marginBottom: '8px', color: 'var(--slate-800)' }}>How to get your API Key:</p>
+                                    <ol style={{ paddingLeft: '20px', fontSize: '13px', color: 'var(--slate-600)' }}>
+                                        <li style={{ marginBottom: '8px' }}>Go to <a href="https://aistudio.google.com/" target="_blank" style={{ color: 'var(--primary)' }}>Google AI Studio</a>.</li>
+                                        <li style={{ marginBottom: '8px' }}>Click on "Projects", then on "+ Create a new project", name your project <strong>GEO309</strong>, and click "Create project".</li>
+                                        <li style={{ marginBottom: '8px' }}>Click on "Get API key", then on "Create API key", name your key "GEO309", select the project you just created, and click "Create key".</li>
+                                        <li style={{ marginBottom: '8px' }}>Copy the key.</li>
+                                        <li style={{ marginBottom: '8px' }}>Paste that key here, and click Save Key.</li>
+                                    </ol>
+                                </div>
+
+                                <div className="modal-actions">
+                                    <button className="btn-secondary" onClick={() => setShowSettings(false)}>Cancel</button>
+                                    <button className="btn-primary" onClick={handleSaveKey}>Save Key</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                    <footer className="landing-footer">
+                        IStudy is an AI-powered essay review developed by <a href="https://github.com/Camilo-Mora" target="_blank">Camilo Mora, Ph.D.</a>
+                    </footer>
+                </div >
+            );
+        }
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    </script>
+</body>
+
+</html>
