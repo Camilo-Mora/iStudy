@@ -201,60 +201,93 @@
             },
 
             BatchAnalyzeResponses: async (transcript, questions, studentResponses) => {
-                const inputs = questions.map((q, i) => ({
-                    id: i,
-                    question: q.text || q.question_text,
-                    student_response: studentResponses[i] || ""
-                }));
-
                 const prompt = `
-                    You are an expert Professor Assistant.
-                    Context: Transcript: """${transcript}"""
-
-                    Task: Analyze the following ${inputs.length} student responses based SOLELY on the transcript.
-                    For EACH question, return a JSON object with:
-                    - "grade": Number (1-5).
-                    - "critique": String. details on MISSING/EXCEEDING logic.
-                    - "model_answer": String (Ideal Response from transcript).
-                    - "timestamp": String (The timestamp range in the transcript where this answer is found, e.g., "12:34-15:20" or "0:45:30-0:48:15". If no timestamp is visible in the transcript, use null).
+                    Analyze these student responses for a Biogeography course based on the lecture transcript.
                     
-                    Input Data:
-                    ${JSON.stringify(inputs)}
+                    Transcript: "${transcript.substring(0, 15000)}" // Truncate for safety
+                    
+                    Questions & Student Responses:
+                    ${questions.map((q, i) => `
+                    Q${q.question_number}: ${q.question_text}
+                    Student said: "${studentResponses[i]}"
+                    `).join('\n')}
 
-                    Output: Strictly a JSON array of objects. No markdown.
+                    Task:
+                    Review each response. Provide:
+                    1. A grade (1-5).
+                    2. A concise critique.
+                    3. A model answer based on the transcript.
+                    4. The exact timestamp (e.g. 12:45) from the lecture transcript where the answer is found.
+
+                    Output MUST be a STRICT JSON array of objects:
+                    [{"grade": 4, "critique": "...", "model_answer": "...", "timestamp": "12:45"}, ...]
                 `;
 
                 try {
                     const data = await window.Core.GeminiRequest('gemini-2.5-flash', prompt);
-
-                    let text = data.candidates[0].content.parts[0].text;
-                    console.log("Raw LLM Response for Batch Analysis:", text);
-
-                    // Clean up common JSON issues
-                    text = text.replace(/```json/g, '').replace(/```/g, '').trim();
-
-                    // Try to extract JSON array if wrapped in other text
-                    const jsonMatch = text.match(/\[\s*\{[\s\S]*\}\s*\]/);
-                    if (jsonMatch) {
-                        text = jsonMatch[0];
-                    }
-
-                    // Remove trailing commas before closing braces/brackets
-                    text = text.replace(/,(\s*[}\]])/g, '$1');
-
-                    console.log("Cleaned JSON:", text);
-
-                    const parsed = JSON.parse(text);
-
-                    if (!Array.isArray(parsed)) {
-                        throw new Error("Response is not an array");
-                    }
+                    let raw = data.candidates[0].content.parts[0].text;
+                    console.log("Batch Analysis Raw Response:", raw);
+                    const jsonMatch = raw.match(/\[[\s\S]*\]/);
+                    if (jsonMatch) raw = jsonMatch[0];
+                    const parsed = JSON.parse(raw);
+                    if (!Array.isArray(parsed)) throw new Error("Batch analysis did not return an array.");
 
                     return parsed;
+                } catch (e) {
+                    console.error("Batch Analysis Error:", e);
+                    return questions.map(() => ({ grade: 1, critique: "Analysis failed", model_answer: "N/A" }));
+                }
+            },
+            VerifyStudentEmail: async (email) => {
+                const scriptUrl = 'https://script.google.com/macros/s/AKfycbz5N8t6TKRA2AOI0q_jgavk9-Rv9JK4QEIDm0Nh41zAKhjVbWJeYZKbzXKDZxYyTq5N2w/exec';
+                const url = `${scriptUrl}?action=send-code&email=${encodeURIComponent(email)}`;
+                try {
+                    const response = await fetch(url);
+                    const data = await response.json();
+                    return data;
                 } catch (err) {
-                    console.error("Batch Analysis Error:", err);
-                    console.error("Failed to parse JSON. Check console for raw response.");
-                    throw err;
+                    return { status: 'error', message: err.toString() };
+                }
+            },
+            VerifyOTP: async (email, code) => {
+                const scriptUrl = 'https://script.google.com/macros/s/AKfycbz5N8t6TKRA2AOI0q_jgavk9-Rv9JK4QEIDm0Nh41zAKhjVbWJeYZKbzXKDZxYyTq5N2w/exec';
+                const url = `${scriptUrl}?action=verify-code&email=${encodeURIComponent(email)}&code=${encodeURIComponent(code)}`;
+                try {
+                    const response = await fetch(url);
+                    const data = await response.json();
+                    return data;
+                } catch (err) {
+                    return { status: 'error', message: err.toString() };
+                }
+            },
+            RegisterCompletion: async (email, chapter) => {
+                const scriptUrl = 'https://script.google.com/macros/s/AKfycbz5N8t6TKRA2AOI0q_jgavk9-Rv9JK4QEIDm0Nh41zAKhjVbWJeYZKbzXKDZxYyTq5N2w/exec';
+
+                // Determine if it's a Video or a Chapter
+                const isVideo = chapter.toString().toLowerCase().includes('video');
+                const chNum = parseInt(chapter.toString().replace(/(chapter|video)/i, '').trim());
+                const paddedNum = chNum.toString().padStart(2, '0');
+
+                // Matches standard course naming: "Chapter 01" or "Video 06"
+                const chapterLabel = isVideo ? `Video ${paddedNum}` : `Chapter ${paddedNum}`;
+
+                const payload = {
+                    studentId: email,
+                    chapter: chapterLabel
+                };
+
+                try {
+                    console.log(`Registering completion:`, payload);
+                    await fetch(scriptUrl, {
+                        method: 'POST',
+                        mode: 'no-cors',
+                        headers: { 'Content-Type': 'text/plain' },
+                        body: JSON.stringify(payload)
+                    });
+                    return { status: 'success' };
+                } catch (err) {
+                    console.error("Registration error:", err);
+                    return { status: 'error', message: err.toString() };
                 }
             }
         };
@@ -290,7 +323,7 @@
         const characters = {
             newton: { name: "Newton", emoji: "🧠", avatarClass: "avatar-newton" },
             tontin: { name: "Tontin", emoji: "🤔", avatarClass: "avatar-tontin" },
-            pinocchio: { name: "Pinocchio", emoji: "🤥", avatarClass: "avatar-pinocchio" },
+            joker: { name: "Joker", emoji: "🃏", avatarClass: "avatar-joker" },
             system: { name: "System", emoji: "📚", avatarClass: "avatar-system" },
             user: { name: "Student", emoji: "👤", avatarClass: "" }
         };
@@ -305,6 +338,10 @@
             const [email1, setEmail1] = useState('');
             const [email2, setEmail2] = useState('');
             const [isEditing, setIsEditing] = useState(false);
+            const [isChoosingEditId, setIsChoosingEditId] = useState(false);
+            const [isVerifyingEmail, setIsVerifyingEmail] = useState(false);
+            const [isWaitingForOTP, setIsWaitingForOTP] = useState(false);
+            const [roadmapData, setRoadmapData] = useState(null);
             const [view, setView] = useState('landing');
             const [messages, setMessages] = useState([]);
             const [inputValue, setInputValue] = useState('');
@@ -312,6 +349,12 @@
             const [currentQIndex, setCurrentQIndex] = useState(0);
             const [reviewStep, setReviewStep] = useState(0);
             const [suggestedChapter, setSuggestedChapter] = useState(null);
+            const [jokerData, setJokerData] = useState({ mode: '', statement: '' });
+            const [hasIntroduced, setHasIntroduced] = useState({ newton: false, tontin: false, joker: false });
+            const [isWaitingForReviewStart, setIsWaitingForReviewStart] = useState(false);
+            const [isWaitingForAvatarStart, setIsWaitingForAvatarStart] = useState(false);
+            const [isWaitingForNextQuestion, setIsWaitingForNextQuestion] = useState(false);
+            const [isWaitingForCompilation, setIsWaitingForCompilation] = useState(false);
 
             const [submission, setSubmission] = useState({
                 student_email: '',
@@ -323,6 +366,15 @@
 
             const chatScrollRef = useRef(null);
             const fileInputRef = useRef(null);
+            const inputRef = useRef(null);
+
+            // Auto-resize textarea
+            useEffect(() => {
+                if (inputRef.current) {
+                    inputRef.current.style.height = 'auto';
+                    inputRef.current.style.height = Math.min(inputRef.current.scrollHeight, 200) + 'px';
+                }
+            }, [inputValue]);
 
             useEffect(() => {
                 if (chatScrollRef.current) {
@@ -341,11 +393,18 @@
             };
 
             const handleUploadClick = () => {
-                if (!apiKey) {
+                if (apiKeys.length === 0) {
                     setShowSettings(true);
                     return;
                 }
-                fileInputRef.current.click();
+
+                if (submission.student_email && roadmapData) {
+                    fileInputRef.current.click();
+                } else {
+                    setView('chat');
+                    addMessage('system', "Before we get started, I need to confirm you are registered in this class. Please tell me the email address you used to register?");
+                    setIsVerifyingEmail(true);
+                }
             };
 
             const handleFileChange = async (e) => {
@@ -438,20 +497,21 @@
                             analysis: analysisResults[i] || { grade: 0, critique: "Analysis failed", model_answer: "N/A" }
                         }));
 
-                        setSubmission({
-                            student_email: email1,
+                        setSubmission(prev => ({
+                            ...prev,
                             chapter: chapterNum,
                             transcript: data.transcript,
                             questions: enrichedQuestions,
                             status: 'reviewing'
-                        });
+                        }));
 
-                        addMessage('system', "Review draft complete! Let's discuss your responses one by one.");
+                        addMessage('system', "Let's review your responses one by one. Are you ready?");
 
-                        // Start the loop
+                        // Wait for user to say they are ready
                         setCurrentQIndex(0);
                         setReviewStep(0);
-                        setTimeout(() => runNextStep(0, 0, "", enrichedQuestions), 1000);
+                        setIsWaitingForReviewStart(true);
+                        setIsProcessing(false);
 
                     } catch (err) {
 
@@ -479,12 +539,17 @@
                 const currentQuestions = questionsOverride || submission.questions;
                 const q = currentQuestions[qIdx];
                 if (!q) {
-                    addMessage('system', "All questions reviewed! Type **'compile'** to generate your final report for Dr. Mora.");
+                    addMessage('system', "Great, we have reviewed all questions now. I have to compile them for you to read and approve. After approving, your responses will be saved to your machine and a message of completion will be sent to Dr. Mora. You will also be able to modify or edit specific responses. Can I compile the responses now?");
+                    setIsWaitingForCompilation(true);
+                    setIsProcessing(false);
                     return;
                 }
 
                 if (qIdx > 0) {
-                    addMessage('system', "🛑 **Testing Mode**: Stopped after Question 1 as requested. Type **'compile'** to see the report, or I can restart testing if you wish.");
+                    addMessage('system', "🛑 **Testing Mode**: Stopped after Question 1 as requested. Let me compile the report for you now.");
+                    setTimeout(() => {
+                        addMessage('system', 'Generating your report...', 'report');
+                    }, 1500);
                     return;
                 }
 
@@ -500,6 +565,12 @@
                     });
                 }
 
+                // NEW: Skip introductions if any chapter/video is already completed
+                const chaptersCompleted = roadmapData ? Object.keys(roadmapData).filter(k =>
+                    (k.toLowerCase().includes('chapter') || k.toLowerCase().includes('video')) && roadmapData[k]
+                ).length : 0;
+                const skipIntro = chaptersCompleted >= 1;
+
                 // LIGHTWEIGHT CONTEXT - Uses Pre-calc Model Answer instead of full Transcript
                 const analysis = q.analysis || {};
                 const commonContext = {
@@ -513,17 +584,29 @@
                 if (step === 0) {
                     if (!studentMsg) {
                         setIsProcessing(true);
+
+                        if (!hasIntroduced.newton && !skipIntro) {
+                            addMessage('newton', "I am Newton. My job is to measure the accuracy of your logic against the lecture material. I’ll provide a score and feedback to help you calibrate your understanding. Don't worry—this isn't a grade; it’s a diagnostic tool to help you sharpen your focus for future videos.");
+                            setHasIntroduced(prev => ({ ...prev, newton: true }));
+                            await new Promise(r => setTimeout(r, 1000));
+                            addMessage('newton', "Can we start?");
+                            setIsWaitingForAvatarStart(true);
+                            setIsProcessing(false);
+                            return;
+                        }
                         const report = `
 ### Question ${q.question_number}
 **Question:** ${q.question_text}
-${analysis.timestamp ? `**📍 Lecture Timestamp:** ${analysis.timestamp}` : ''}
 
 **Your Response:** ${q.student_response}
 
 **Score:** ${analysis.grade}/5
+
 **Feedback:** ${analysis.critique}
 
 **Model Answer (AI):** ${analysis.model_answer}
+
+${analysis.timestamp ? `***I found this response around minute ${analysis.timestamp} of the video.***` : ''}
 `;
                         addMessage('newton', report);
                         setTimeout(() => {
@@ -543,15 +626,58 @@ ${analysis.timestamp ? `**📍 Lecture Timestamp:** ${analysis.timestamp}` : ''}
                             setReviewStep(1);
                             setTimeout(() => runNextStep(qIdx, 1, ""), 500);
                         } else {
-                            const discussPrompt = `You are Newton 🧠. Context: Model Answer "${analysis.model_answer}". User grade ${analysis.grade}. User says "${studentMsg}". Evaluate this. If better, acknowledge. If not, explain why. Ask if satisfied.`;
-                            const discussionRes = await window.InvokeLLM(discussPrompt, commonContext);
-                            addMessage('newton', discussionRes);
-                            if (discussionRes.toLowerCase().includes("better") || discussionRes.toLowerCase().includes("valid")) {
+                            setIsProcessing(true);
+                            const reEvalPrompt = `
+                                You are Newton 🧠. Analyze this student's improved explanation against the Model Answer.
+                                
+                                Model Answer: "${analysis.model_answer}"
+                                Student's New Explanation: "${studentMsg}"
+                                
+                                Provide STRICTLY a JSON object with:
+                                - "grade": Number (1-5).
+                                - "critique": String (feedback on the new explanation).
+                                
+                                No markdown, just JSON.
+                            `;
+
+                            try {
+                                const resText = await window.InvokeLLM(reEvalPrompt, commonContext);
+                                const jsonMatch = resText.match(/\{[\s\S]*\}/);
+                                const newEval = jsonMatch ? JSON.parse(jsonMatch[0]) : { grade: analysis.grade, critique: "I've reviewed your update." };
+
                                 setSubmission(prev => {
                                     const newQs = [...prev.questions];
-                                    newQs[qIdx] = { ...newQs[qIdx], final_response: studentMsg };
+                                    newQs[qIdx] = {
+                                        ...newQs[qIdx],
+                                        analysis: { ...newQs[qIdx].analysis, ...newEval },
+                                        student_response: studentMsg
+                                    };
                                     return { ...prev, questions: newQs };
                                 });
+
+                                const report = `
+### Question ${q.question_number}
+**Question:** ${q.question_text}
+
+**Your Response:** ${studentMsg}
+
+**Score:** ${newEval.grade}/5
+
+**Feedback:** ${newEval.critique}
+
+**Model Answer (AI):** ${analysis.model_answer}
+
+${analysis.timestamp ? `***I found this response around minute ${analysis.timestamp} of the video.***` : ''}
+`;
+                                addMessage('newton', report);
+                                setTimeout(() => {
+                                    addMessage('newton', "Do you agree with this assessment? (Type **'Yes'** to accept the Model Answer, or provide a better explanation/argument to improve your score.)");
+                                    setIsProcessing(false);
+                                }, 1000);
+                            } catch (err) {
+                                console.error("Re-eval error:", err);
+                                addMessage('newton', "I had trouble analyzing that. Could you try again or just say 'Yes' if you want to proceed?");
+                                setIsProcessing(false);
                             }
                         }
                         setIsProcessing(false);
@@ -563,6 +689,17 @@ ${analysis.timestamp ? `**📍 Lecture Timestamp:** ${analysis.timestamp}` : ''}
                 else if (step === 1) {
                     if (!studentMsg) {
                         setIsProcessing(true);
+
+                        if (!hasIntroduced.tontin && !skipIntro) {
+                            addMessage('tontin', "My name is Tontin. I will always ask you to explain the material in your own words. My role is to ensure you have a confident grasp of the course content and can express complex ideas clearly and independently.");
+                            setHasIntroduced(prev => ({ ...prev, tontin: true }));
+                            await new Promise(r => setTimeout(r, 1000));
+                            addMessage('tontin', "Can we start?");
+                            setIsWaitingForAvatarStart(true);
+                            setIsProcessing(false);
+                            return;
+                        }
+
                         await new Promise(r => setTimeout(r, 600));
                         addMessage('tontin', "Can you explain this response to me using your own words?");
                         setIsProcessing(false);
@@ -570,36 +707,34 @@ ${analysis.timestamp ? `**📍 Lecture Timestamp:** ${analysis.timestamp}` : ''}
                     } else {
                         setIsProcessing(true);
                         const tontinEvalPrompt = `### ROLE
-You are "Tontin," a friendly, slightly slow-paced, but eager-to-learn peer student. You are not the professor. You are a student who didn't quite understand the video, so you rely on the User to explain it to you.
+You are "Tontin," a friendly, humble peer student. You are not a professor. You rely on the User to explain the lecture content to you because you often miss the details.
 
 ### INPUT DATA
-**Student Explanation:** "${studentMsg}"
-**Key Concepts (Golden Answer):** "${analysis.model_answer}"
+1. **Student Explanation:** "${studentMsg}"
+2. **Key Concepts:** "${analysis.model_answer}"
 
 ### TASK
-Compare the **Student Explanation** against the **Key Concepts**. Determine which concepts were successfully explained and which were missed.
+Compare the **Student Explanation** against the **Key Concepts**. Identify what was explained well and what I (Tontin) am still confused about.
 
 ### OUTPUT FORMAT
-Speak as Tontin. Use simple, friendly language. Structure your response in three distinct parts:
+Keep the response visual and scannable. Do not use complex headers. Follow this exact structure:
 
-**1. The "Aha!" Moment (What they got right)**
-* List the points the student explained clearly.
-* Example: "Oh! I understood when you said [X], that makes sense now."
+**1. Greeting**
+A single, warm sentence acknowledging the student's help.
 
-**2. The Confusion (What is missing)**
-* Identify concepts from the "Key Concepts" that the student omitted or explained vaguely.
-* Frame this as *your* confusion, not *their* failure.
-* Example: "I'm still a little lost about [Missing Concept Y]. The video mentioned it, but I didn't catch how it fits into your explanation."
+* **What was clear:** Use ✅ for every specific concept the student explained correctly.
+* **What is confusing:** Use ❓ for concepts that were missing or vague in the student's explanation. Frame this as **your** (Tontin's) confusion or memory gap.
 
-**3. The Summary Score**
+**2. Assessment**
 * Give a qualitative assessment of "Completeness" (Low, Medium, High).
 * If "High": Thank them for being a great teacher.
 * If "Low/Medium": Say, "I think I get most of it, but I might re-watch the part about [Missing Concept] just to be safe."
 
-### CONSTRAINTS
-* Do NOT ask the student to try again.
-* Do NOT lecture the student.
-* Keep the tone humble. You are learning from them.`;
+### TONE RULES
+* **Be specific:** State exactly what concept you are referring to in each point.
+* **Be humble:** Always frame missing info as something you missed or didn't understand. Use phrases like "I'm unsure about..." or "I missed the part about...".
+* **Formatting:** Put the emoji at the start of the line.
+`;
 
                         const tontinEval = await window.InvokeLLM(tontinEvalPrompt, commonContext);
                         addMessage('tontin', tontinEval);
@@ -612,77 +747,96 @@ Speak as Tontin. Use simple, friendly language. Structure your response in three
                     }
                 }
 
-                // STEP 2: USER RESPONDED TO PINOCCHIO -> PINOCCHIO EVAL -> NEXT QUESTION
-                // STEP 2: PINOCCHIO (Intro & Eval)
+                // STEP 2: JOKER (Intro & Eval)
                 else if (step === 2) {
                     if (!studentMsg) {
                         setIsProcessing(true);
 
+                        if (!hasIntroduced.joker && !skipIntro) {
+                            addMessage('joker', "My name is Joker. I may or may not attempt to deceive you with my statements. My role is to help you become a critical thinker by challenging you to distinguish between accurate, partially correct, and completely false information.");
+                            setHasIntroduced(prev => ({ ...prev, joker: true }));
+                            await new Promise(r => setTimeout(r, 1000));
+                            addMessage('joker', "Can we start?");
+                            setIsWaitingForAvatarStart(true);
+                            setIsProcessing(false);
+                            return;
+                        }
+
                         // Randomly choose mode (50/50 chance)
                         const mode = Math.random() < 0.5 ? "TRUTHFUL" : "DECEPTIVE";
 
-                        const pinocchioIntroPrompt = `### ROLE
-You are a confident but occasionally careless peer student. You are discussing a video lecture with another student. Your goal is to test the student's critical thinking by reacting to their answers.
+                        const jokerIntroPrompt = `### ROLE
+You are "Joker," a confident but occasionally careless peer student. You are discussing a video lecture with another student. Your goal is to test the student's critical thinking by trying or not to deceive them.
 
 ### INPUT DATA
 **The Question:** ${q.question_text}
-**Actual Response:** ${analysis.model_answer}
+**Actual Response (From Video):** ${analysis.model_answer}
 **Mode:** ${mode}
 
 ### INSTRUCTIONS
+In all cases, you must speak with high confidence, as if stating an absolute fact. 
+Start with phrases like "I watched the lecture and I understand that..." or "Based on the lecture, I can say that...". 
+Finish with a brief binary question for the student to confirm or deny your statement (e.g., "Do you concur?", "I am correct, right?", or "Do you agree?"). Phrase the question expecting a binary response (Yes/No).
 
 **If Mode is "TRUTHFUL":**
-* Agree with the Student Response.
-* Paraphrase their answer using slightly different vocabulary to show understanding. is this right?
-* Keep it brief.
+* Paraphrase the **Actual Response** using slightly different vocabulary to show understanding.
+* Keep it brief and encouraging.
 
 **If Mode is "DECEPTIVE":**
-* You must generate a response that sounds plausible but contains a **clear, objective error**.
+* You must generate a statement that sounds plausible but contains a **clear, objective error**.
 * **CRITICAL CONSTRAINT:** Do not use vague semantic tricks. Do not split hairs on definitions. The error must be factual or logical.
 * **Use one of these 3 Deception Tactics:**
     1.  **The Reversal:** Swap the Cause and Effect (e.g., "The rain causes the clouds" instead of "Clouds cause rain").
     2.  **The Absolute:** Remove a necessary condition (e.g., "Water always boils at 100°C" -> omit "at sea level").
     3.  **The Myth:** Confidently state a common misconception related to the topic.
-* **Tone:** Be high-confidence. Use phrases like "Oh, that's easy," or "Basically, the video said..." This invites the student to correct you.
 
 ### SAFETY CHECK (Self-Correction)
 Before outputting a DECEPTIVE response, ask yourself: "Is this error obvious enough that a professor would mark it wrong?" If the answer is "It's debatable," **discard it** and choose a more obvious error.
 
 ### OUTPUT FORMAT
-Output *only* your dialogue as Pinocchio. Do not include labels like "Deceptive Response:" or explanations.`;
+Output *only* your dialogue as Joker. Do not include labels like "Statement:" or "Mode:".`;
 
-                        const pinocchioRes = await window.InvokeLLM(pinocchioIntroPrompt, commonContext);
-                        addMessage('pinocchio', pinocchioRes);
+                        const jokerRes = await window.InvokeLLM(jokerIntroPrompt, commonContext);
+                        setJokerData({ mode, statement: jokerRes });
+                        addMessage('joker', jokerRes);
                         setIsProcessing(false);
                         return;
                     } else {
                         setIsProcessing(true);
-                        const pinocchioEvalPrompt = `You are Pinocchio 🤥, a peer student who just made a statement about the topic.
+                        const jokerEvalPrompt = `### ROLE
+You are Joker 🃏, a peer student who just made a statement to another student. You were in ${jokerData.mode} mode.
 
-**The Actual Answer:** ${analysis.model_answer}
-**Your Previous Statement:** [The statement you just made to the student]
-**Student's Response:** "${studentMsg}"
+### CONTEXT
+**The Actual Answer (Fact):** ${analysis.model_answer}
+**Your Previous Statement:** "${jokerData.statement}"
+**Target Mode during statement:** ${jokerData.mode}
+**Student's Reaction:** "${studentMsg}"
 
 ### TASK
-Evaluate if the student correctly identified whether your statement was accurate or contained an error.
+1. Determine if the student correctly identified your statement as TRUTHFUL or DECEPTIVE.
+2. Provide feedback.
 
-**If they were RIGHT:**
-* Say "Drat! You got me!" or similar
-* Briefly acknowledge what the error was (if you were deceptive) or confirm the truth (if you were truthful)
+### FEEDBACK RULES
+* Use a friendly, peer-student tone.
+* If you were in **DECEPTIVE** mode:
+    * If the student caught your trick: "Nice catch! I was actually trying to trick you with a factual error, but you didn't fall for it. You correctly identified that [explain the error briefly]."
+    * If the student missed the trick: "Haha! I actually tricked you! I was being deceptive—the part about [X] was wrong. The video actually said [Y]."
+* If you were in **TRUTHFUL** mode:
+    * If the student agreed: "Exactly! I was actually not trying to trick you there. You correctly recognized that I was being truthful about the lecture content."
+    * If the student disagreed (thought it was a trick): "Oh, actually I wasn't trying to trick you that time! I was being truthful, but you thought I was being deceptive. It turns out my statement was accurate according to the lecture."
 
-**If they were WRONG:**
-* Say "Haha! I tricked you!" or similar
-* Clearly explain what the actual truth is
-* Point out what they missed
+### OUTPUT FORMAT
+Output only your peer-style feedback as Joker.`;
 
-Keep it brief and conversational. Output only your dialogue.`;
-
-                        const pinocchioEval = await window.InvokeLLM(pinocchioEvalPrompt, commonContext);
-                        addMessage('pinocchio', pinocchioEval);
+                        const jokerEval = await window.InvokeLLM(jokerEvalPrompt, commonContext);
+                        addMessage('joker', jokerEval);
                         setIsProcessing(false);
-                        setCurrentQIndex(qIdx + 1);
-                        setReviewStep(0);
-                        setTimeout(() => { runNextStep(qIdx + 1, 0); }, 2000);
+
+                        // Move to next question after Joker feedback
+                        setTimeout(() => {
+                            addMessage('system', "Can we move to the next question?");
+                            setIsWaitingForNextQuestion(true);
+                        }, 1000);
                     }
                 }
             };
@@ -725,6 +879,83 @@ Keep it brief and conversational. Output only your dialogue.`;
                 const text = inputValue.trim();
                 setInputValue('');
                 addMessage('user', text);
+
+                if (isVerifyingEmail) {
+                    setIsProcessing(true);
+                    const res = await window.Core.VerifyStudentEmail(text);
+                    setIsProcessing(false);
+                    if (res.status === 'success') {
+                        setEmail1(text);
+                        setEmail2(text);
+                        setSubmission(prev => ({ ...prev, student_email: text }));
+                        setIsVerifyingEmail(false);
+                        setIsWaitingForOTP(true);
+                        addMessage('system', `Great, I found you in the GEO309 roster. I just sent a **3-digit verification code** to **${text}**. \n\nPlease enter the code below to unlock your session.`);
+                    } else {
+                        addMessage('system', `❌ **Verification Error:** ${res.message || "Email not found in our records."} \n\nPlease double-check the spelling.`);
+                    }
+                    return;
+                }
+
+                if (isWaitingForOTP) {
+                    setIsProcessing(true);
+                    const res = await window.Core.VerifyOTP(submission.student_email, text);
+                    setIsProcessing(false);
+                    if (res.status === 'success') {
+                        setIsWaitingForOTP(false);
+                        setRoadmapData(res.completion);
+                        addMessage('system', "Verification successful! Welcome back. Generating your progress roadmap...");
+                        setTimeout(() => {
+                            addMessage('system', '', 'roadmap');
+                        }, 1000);
+                    } else {
+                        addMessage('system', "❌ **Invalid Code.** The verification code you entered is incorrect. Please check your email and try again.");
+                    }
+                    return;
+                }
+
+                if (isChoosingEditId) {
+                    setIsChoosingEditId(false);
+                    const id = text.trim();
+                    const idx = submission.questions.findIndex(q => q.question_number.toString() === id);
+                    if (idx !== -1) {
+                        setIsEditing(true);
+                        setCurrentQIndex(idx);
+                        setReviewStep(0);
+                        const qToEdit = submission.questions[idx];
+                        addMessage('newton', `### Editing Question ${id}\n**Question:** ${qToEdit.question_text}\n\n**Current Agreed Response:** ${qToEdit.final_response}\n\n*Please enter your improved response below:*`);
+                    } else {
+                        addMessage('system', `❌ Question **${id}** not found. Please click "Edit a Response" again if you wish to try a different number.`);
+                    }
+                    return;
+                }
+
+                if (isWaitingForReviewStart) {
+                    setIsWaitingForReviewStart(false);
+                    runNextStep(0, 0, "");
+                    return;
+                }
+
+                if (isWaitingForAvatarStart) {
+                    setIsWaitingForAvatarStart(false);
+                    // Just call runNextStep with current state to pick up where it left off
+                    runNextStep(currentQIndex, reviewStep, "");
+                    return;
+                }
+
+                if (isWaitingForCompilation) {
+                    setIsWaitingForCompilation(false);
+                    addMessage('system', 'Generating your report...', 'report');
+                    return;
+                }
+
+                if (isWaitingForNextQuestion) {
+                    setIsWaitingForNextQuestion(false);
+                    setCurrentQIndex(currentQIndex + 1);
+                    setReviewStep(0);
+                    runNextStep(currentQIndex + 1, 0);
+                    return;
+                }
 
                 if (isEditing && (text.toLowerCase().includes('yes') || text.toLowerCase().includes('report') || text.toLowerCase().includes('ok'))) {
                     setIsEditing(false);
@@ -909,33 +1140,17 @@ Keep it brief and conversational. Output only your dialogue.`;
                                                                 </div>
 
                                                                 <div className="report-actions-mini">
-                                                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '15px' }}>
-                                                                        <div className="api-input-group">
-                                                                            <label>Email</label>
-                                                                            <input type="email" placeholder="Email" value={email1} onChange={(e) => setEmail1(e.target.value)} style={{ fontSize: '12px' }} />
-                                                                        </div>
-                                                                        <div className="api-input-group">
-                                                                            <label>Confirm</label>
-                                                                            <input type="email" placeholder="Email" value={email2} onChange={(e) => setEmail2(e.target.value)} style={{ fontSize: '12px' }} />
-                                                                        </div>
+                                                                    <div style={{ marginBottom: '15px', color: 'var(--slate-500)', fontSize: '13px' }}>
+                                                                        Verified as: <strong>{submission.student_email}</strong>
                                                                     </div>
-
                                                                     <button className="btn-secondary" style={{ width: '100%', marginBottom: '10px' }} onClick={() => {
-                                                                        const id = prompt("Which question number would you like to edit?");
-                                                                        const idx = submission.questions.findIndex(q => q.question_number.toString() === id);
-                                                                        if (idx !== -1) {
-                                                                            setIsEditing(true);
-                                                                            setCurrentQIndex(idx);
-                                                                            setReviewStep(0);
-                                                                            addMessage('system', `### Editing Question ${id} \n ** ${submission.questions[idx].question_text}**\n\nPlease enter your improved response below: `);
-                                                                        } else {
-                                                                            alert("Question not found.");
-                                                                        }
+                                                                        setIsChoosingEditId(true);
+                                                                        addMessage('system', "Which question number would you like to edit? (Enter the digit, e.g., 1)");
                                                                     }}>Edit a Response</button>
 
                                                                     {(() => {
                                                                         const r = generateReportData();
-                                                                        const canSubmit = email1 && email1 === email2 && email1.includes('@');
+                                                                        const canSubmit = !!submission.student_email;
                                                                         return (
                                                                             <a
                                                                                 href={canSubmit ? r.uri : "javascript:void(0)"}
@@ -958,14 +1173,10 @@ Keep it brief and conversational. Output only your dialogue.`;
                                                                                     }
                                                                                     setIsProcessing(true);
                                                                                     try {
-                                                                                        await fetch('https://script.google.com/macros/s/AKfycbyBFxUo5yRhLvCx7_kiFacBah0C3KK0jTSif0_Yw-wG7dfnYgOqSav8dw_CSPoUojPllw/exec', {
-                                                                                            method: 'POST',
-                                                                                            mode: 'no-cors',
-                                                                                            body: JSON.stringify({
-                                                                                                studentId: email1,
-                                                                                                chapter: `Chapter${submission.chapter}`
-                                                                                            })
-                                                                                        });
+                                                                                        await window.Core.RegisterCompletion(
+                                                                                            submission.student_email,
+                                                                                            parseInt(submission.chapter, 10)
+                                                                                        );
                                                                                         setTimeout(() => setView('completion'), 1500);
                                                                                     } catch (err) {
                                                                                         setView('completion');
@@ -979,6 +1190,91 @@ Keep it brief and conversational. Output only your dialogue.`;
                                                                         );
                                                                     })()}
                                                                 </div>
+                                                            </div>
+                                                        ) : msg.type === 'roadmap' ? (
+                                                            <div className="roadmap-container">
+                                                                <div className="roadmap-title">Academic Roadmap</div>
+
+                                                                <div className="roadmap-section">
+                                                                    <div className="roadmap-section-title">Chapters submitted</div>
+                                                                    <div className="roadmap-row">
+                                                                        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13].map(num => {
+                                                                            const padded = num.toString().padStart(2, '0');
+                                                                            const isDone = roadmapData && (
+                                                                                roadmapData[`chapter ${padded}`] ||
+                                                                                roadmapData[`chapter${padded}`] ||
+                                                                                roadmapData[`Chapter ${padded}`] ||
+                                                                                roadmapData[`Chapter${padded}`] ||
+                                                                                roadmapData[`chapter ${num}`] ||
+                                                                                roadmapData[`chapter${num}`]
+                                                                            );
+                                                                            const grades = {
+                                                                                1: 'F', 2: 'F', 3: 'F', 4: 'F', 5: 'D-', 6: 'D',
+                                                                                7: 'D+', 8: 'C-', 9: 'C', 10: 'C+', 11: 'B-', 12: 'B', 13: 'B+'
+                                                                            };
+                                                                            return (
+                                                                                <div key={num} className="roadmap-column">
+                                                                                    <div className={`roadmap-box ${isDone ? 'completed' : ''}`}>
+                                                                                        {num}
+                                                                                        {isDone && <span className="tick">✓</span>}
+                                                                                    </div>
+                                                                                    <div className={`roadmap-grade-box ${isDone ? 'completed' : ''}`}>
+                                                                                        {grades[num]}
+                                                                                    </div>
+                                                                                </div>
+                                                                            );
+                                                                        })}
+                                                                    </div>
+                                                                </div>
+
+                                                                <div className="roadmap-section">
+                                                                    <div className="roadmap-section-title">Video exam</div>
+                                                                    <div className="roadmap-row">
+                                                                        {[6, 8, 10].map(num => {
+                                                                            const padded = num.toString().padStart(2, '0');
+                                                                            const isDone = roadmapData && (
+                                                                                roadmapData[`video ${padded}`] ||
+                                                                                roadmapData[`video${padded}`] ||
+                                                                                roadmapData[`Video ${padded}`] ||
+                                                                                roadmapData[`Video${padded}`] ||
+                                                                                roadmapData[`video ${num}`] ||
+                                                                                roadmapData[`video${num}`]
+                                                                            );
+                                                                            const vGrades = { 6: 'A-', 8: 'A', 10: 'A+' };
+                                                                            return (
+                                                                                <div key={num} className="roadmap-column">
+                                                                                    <div className={`roadmap-box ${isDone ? 'completed' : ''}`}>
+                                                                                        {num}
+                                                                                        {isDone && <span className="tick">✓</span>}
+                                                                                    </div>
+                                                                                    <div className={`roadmap-grade-box ${isDone ? 'completed' : ''}`}>
+                                                                                        {vGrades[num]}
+                                                                                    </div>
+                                                                                </div>
+                                                                            );
+                                                                        })}
+                                                                    </div>
+                                                                </div>
+
+                                                                <div style={{ marginTop: '20px' }}>
+                                                                    <button
+                                                                        className="main-upload-btn"
+                                                                        style={{ fontSize: '16px', padding: '12px 24px', width: 'auto' }}
+                                                                        onClick={() => fileInputRef.current.click()}
+                                                                    >
+                                                                        <span className="btn-icon">📂</span> Upload Response Sheet
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        ) : msg.type === 'upload_action' ? (
+                                                            <div className="action-card" style={{ textAlign: 'center', padding: '10px 0' }}>
+                                                                <button
+                                                                    className="main-upload-btn"
+                                                                    style={{ fontSize: '16px', padding: '12px 24px', margin: '0 auto', width: 'auto' }}
+                                                                    onClick={() => fileInputRef.current.click()}
+                                                                >
+                                                                    <span className="btn-icon">📂</span> Upload Response Sheet
+                                                                </button>
                                                             </div>
                                                         ) : msg.type === 'reupload_action' ? (
                                                             <div className="action-card" style={{ textAlign: 'center', padding: '10px 0' }}>
@@ -1020,9 +1316,8 @@ Keep it brief and conversational. Output only your dialogue.`;
                                     className="completion-overlay active"
                                 >
                                     <div className="success-icon">✓</div>
-                                    <h2>Chapter Complete!</h2>
+                                    <h2>Chapter {submission.chapter} Complete!</h2>
                                     <p>
-                                        You have successfully completed **Chapter {submission.chapter}**. <br />
                                         Your responses have been saved to your local machine, and Dr. Mora has been notified.
                                     </p>
                                     <button className="btn-primary" onClick={() => window.location.reload()}>
@@ -1038,13 +1333,20 @@ Keep it brief and conversational. Output only your dialogue.`;
                             <div className="input-fixed-container">
                                 <div className="input-box-wrapper">
                                     <button className="action-btn" onClick={() => fileInputRef.current.click()}>+</button>
-                                    <input
+                                    <textarea
+                                        ref={inputRef}
                                         className="input-box"
                                         placeholder={isProcessing ? "Processing..." : "Type your response..."}
                                         value={inputValue}
                                         onChange={(e) => setInputValue(e.target.value)}
-                                        onKeyPress={(e) => e.key === 'Enter' && handleSend()}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter' && !e.shiftKey) {
+                                                e.preventDefault();
+                                                handleSend();
+                                            }
+                                        }}
                                         disabled={isProcessing}
+                                        rows="1"
                                     />
                                     <button className="action-btn" onClick={handleVoiceInput} disabled={isProcessing} title="Dictate Response">🎤</button>
                                     <button className="action-btn send-btn" onClick={handleSend} disabled={isProcessing}>➤</button>
@@ -1057,73 +1359,75 @@ Keep it brief and conversational. Output only your dialogue.`;
                             <div className="settings-overlay">
                                 <div className="settings-modal">
                                     <h2>Google AI Settings</h2>
-                                    <p>This application requires a Google AI API key to function. Your key is stored locally in your browser and is never sent to our servers.</p>
+                                    <div className="modal-content">
+                                        <p>This application requires a Google AI API key to function. Your key is stored locally in your browser and is never sent to our servers.</p>
 
-                                    {/* SAVED KEYS LIST */}
-                                    {apiKeys.length > 0 && (
-                                        <div className="saved-keys-section" style={{ marginBottom: '15px', padding: '10px', background: '#f0f9ff', borderRadius: '6px', border: '1px solid #e0f2fe' }}>
-                                            <h4 style={{ margin: '0 0 8px 0', fontSize: '0.9em', color: '#0369a1' }}>Active Keys (Vault)</h4>
-                                            <div style={{ maxHeight: '100px', overflowY: 'auto' }}>
-                                                {apiKeys.map((k, i) => (
-                                                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85em', padding: '4px 0', borderBottom: '1px solid #e0f2fe' }}>
-                                                        <span><strong>{k.label}</strong>: {k.key.substring(0, 8)}...</span>
-                                                        <span onClick={() => handleRemoveKey(i)} style={{ cursor: 'pointer', color: 'red', fontWeight: 'bold' }}>✕</span>
-                                                    </div>
-                                                ))}
+                                        {/* SAVED KEYS LIST */}
+                                        {apiKeys.length > 0 && (
+                                            <div className="saved-keys-section" style={{ marginBottom: '15px', padding: '10px', background: '#f0f9ff', borderRadius: '6px', border: '1px solid #e0f2fe' }}>
+                                                <h4 style={{ margin: '0 0 8px 0', fontSize: '0.9em', color: '#0369a1' }}>Active Keys (Vault)</h4>
+                                                <div style={{ maxHeight: '100px', overflowY: 'auto' }}>
+                                                    {apiKeys.map((k, i) => (
+                                                        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85em', padding: '4px 0', borderBottom: '1px solid #e0f2fe' }}>
+                                                            <span><strong>{k.label}</strong>: {k.key.substring(0, 8)}...</span>
+                                                            <span onClick={() => handleRemoveKey(i)} style={{ cursor: 'pointer', color: 'red', fontWeight: 'bold' }}>✕</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
                                             </div>
-                                        </div>
-                                    )}
+                                        )}
 
-                                    <div className="api-input-group">
-                                        <label>Google API Key</label>
-                                        <input
-                                            type="password"
-                                            className="input-box"
-                                            placeholder="Paste your key here..."
-                                            value={tempKey}
-                                            onChange={(e) => setTempKey(e.target.value)}
-                                        />
-
-                                        {/* Extra key inputs */}
-                                        {extraKeys.map((key, idx) => (
+                                        <div className="api-input-group">
+                                            <label>Google API Key</label>
                                             <input
-                                                key={idx}
                                                 type="password"
                                                 className="input-box"
-                                                style={{ marginTop: '8px' }}
-                                                placeholder={`Paste key #${idx + 2} here...`}
-                                                value={key}
-                                                onChange={(e) => {
-                                                    const updated = [...extraKeys];
-                                                    updated[idx] = e.target.value;
-                                                    setExtraKeys(updated);
-                                                }}
+                                                placeholder="Paste your key here..."
+                                                value={tempKey}
+                                                onChange={(e) => setTempKey(e.target.value)}
                                             />
-                                        ))}
 
-                                        <div style={{ marginTop: '8px', textAlign: 'right' }}>
-                                            <a
-                                                href="#"
-                                                onClick={(e) => { e.preventDefault(); setExtraKeys([...extraKeys, '']); }}
-                                                style={{ fontSize: '0.85em', color: 'var(--primary)', textDecoration: 'none' }}
-                                            >
-                                                + Add one more key
-                                            </a>
+                                            {/* Extra key inputs */}
+                                            {extraKeys.map((key, idx) => (
+                                                <input
+                                                    key={idx}
+                                                    type="password"
+                                                    className="input-box"
+                                                    style={{ marginTop: '8px' }}
+                                                    placeholder={`Paste key #${idx + 2} here...`}
+                                                    value={key}
+                                                    onChange={(e) => {
+                                                        const updated = [...extraKeys];
+                                                        updated[idx] = e.target.value;
+                                                        setExtraKeys(updated);
+                                                    }}
+                                                />
+                                            ))}
+
+                                            <div style={{ marginTop: '8px', textAlign: 'right' }}>
+                                                <a
+                                                    href="#"
+                                                    onClick={(e) => { e.preventDefault(); setExtraKeys([...extraKeys, '']); }}
+                                                    style={{ fontSize: '0.85em', color: 'var(--primary)', textDecoration: 'none' }}
+                                                >
+                                                    + Add one more key
+                                                </a>
+                                            </div>
                                         </div>
-                                    </div>
 
-                                    <div className="instructions" style={{ marginBottom: '20px', paddingRight: '10px' }}>
-                                        <p style={{ fontWeight: '600', marginBottom: '8px', color: 'var(--slate-800)' }}>How to get your API Key:</p>
-                                        <ol style={{ paddingLeft: '20px', fontSize: '13px', color: 'var(--slate-600)' }}>
-                                            <li style={{ marginBottom: '8px' }}>Go to <a href="https://aistudio.google.com/" target="_blank" style={{ color: 'var(--primary)' }}>Google AI Studio</a>.</li>
-                                            <li style={{ marginBottom: '8px' }}>Click on "Projects", then on "+ Create a new project", name your project <strong>GEO309</strong>, and click "Create project".</li>
-                                            <li style={{ marginBottom: '8px' }}>Click on "Get API key", then on "Create API key", name your key "GEO309", select the project you just created, and click "Create key".</li>
-                                            <li style={{ marginBottom: '8px' }}>Copy the key.</li>
-                                            <li style={{ marginBottom: '8px' }}>Paste that key here and click Save Key.</li>
-                                        </ol>
-                                        <p style={{ fontSize: '13px', color: 'var(--slate-600)', marginTop: '12px', fontStyle: 'italic' }}>
-                                            You can add multiple keys from different email accounts to avoid quota limits! Simply repeat steps 1 to 5 using different emails.
-                                        </p>
+                                        <div className="instructions" style={{ marginBottom: '20px', paddingRight: '10px' }}>
+                                            <p style={{ fontWeight: '600', marginBottom: '8px', color: 'var(--slate-800)' }}>How to get your API Key:</p>
+                                            <ol style={{ paddingLeft: '20px', fontSize: '13px', color: 'var(--slate-600)' }}>
+                                                <li style={{ marginBottom: '8px' }}>Go to <a href="https://aistudio.google.com/" target="_blank" style={{ color: 'var(--primary)' }}>Google AI Studio</a>.</li>
+                                                <li style={{ marginBottom: '8px' }}>Click on "Projects", then on "+ Create a new project", name your project <strong>GEO309</strong>, and click "Create project".</li>
+                                                <li style={{ marginBottom: '8px' }}>Click on "Get API key", then on "Create API key", name your key "GEO309", select the project you just created, and click "Create key".</li>
+                                                <li style={{ marginBottom: '8px' }}>Copy the key.</li>
+                                                <li style={{ marginBottom: '8px' }}>Paste that key here and click Save Key.</li>
+                                            </ol>
+                                            <p style={{ fontSize: '13px', color: 'var(--slate-600)', marginTop: '12px', fontStyle: 'italic' }}>
+                                                You can add multiple keys from different email accounts to avoid quota limits! Simply repeat steps 1 to 5 using different emails.
+                                            </p>
+                                        </div>
                                     </div>
 
                                     <div className="modal-actions">

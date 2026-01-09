@@ -85,21 +85,24 @@ header {
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: flex-start;
-    /* Start from top to allow padding push */
-    gap: 32px;
+    justify-content: center;
+    gap: clamp(16px, 3vh, 32px);
     text-align: center;
-    flex: 1;
     width: 100%;
-    padding-top: 15vh;
-    /* Pushes content down ~15% of screen height */
+    height: calc(100vh - 72px);
+    /* Full viewport minus header */
+    padding: clamp(8px, 2vh, 24px);
+    overflow: hidden;
+    /* Prevent any scrolling */
 }
 
 .title-image {
-    width: 100%;
+    width: 90%;
     max-width: 800px;
-    margin-bottom: -60px;
-    /* Overlap to hide video whitespace */
+    max-height: 60vh;
+    /* Limit video height to 60% of viewport */
+    object-fit: contain;
+    margin-bottom: clamp(-40px, -5vh, -60px);
     transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
     position: relative;
     z-index: 1;
@@ -108,22 +111,22 @@ header {
 .main-upload-btn {
     display: flex;
     align-items: center;
-    gap: 16px;
-    padding: 20px 48px;
+    gap: clamp(12px, 2vw, 16px);
+    padding: clamp(16px, 2.5vh, 20px) clamp(32px, 5vw, 48px);
     background: #dbe2eb;
     color: #334155;
     border-radius: 9999px;
-    font-size: 20px;
+    font-size: clamp(16px, 2.5vw, 20px);
     font-weight: 500;
     border: none;
     cursor: pointer;
     transition: all 0.2s ease;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
     margin-top: 0;
-    /* Removed margin to allow overlap */
     position: relative;
     z-index: 10;
-    /* Keeps button above video if they touch */
+    flex-shrink: 0;
+    /* Prevent button from shrinking */
 }
 
 .main-upload-btn:hover {
@@ -246,7 +249,7 @@ header {
     border: 1px solid #fde68a;
 }
 
-.avatar-pinocchio {
+.avatar-joker {
     background: #ffe4e6;
     border: 1px solid #fecdd3;
 }
@@ -302,25 +305,40 @@ header {
     display: flex;
     gap: 12px;
     background: white;
-    padding: 8px 16px;
-    border-radius: 28px;
+    padding: 10px 16px;
+    border-radius: 24px;
     border: 1px solid var(--slate-200);
     box-shadow: var(--shadow-lg);
-    align-items: center;
+    align-items: flex-end;
+    /* Keep buttons at the bottom */
 }
 
 .input-box {
     flex: 1;
     border: none;
-    padding: 8px;
+    padding: 8px 0;
     font-size: 16px;
     outline: none;
     background: transparent;
+    resize: none;
+    max-height: 200px;
+    line-height: 1.5;
+    overflow-y: auto;
+    font-family: inherit;
+}
+
+.input-box::-webkit-scrollbar {
+    width: 6px;
+}
+
+.input-box::-webkit-scrollbar-thumb {
+    background-color: var(--slate-200);
+    border-radius: 10px;
 }
 
 .action-btn {
-    width: 40px;
-    height: 40px;
+    width: 36px;
+    height: 36px;
     border-radius: 50%;
     border: none;
     background: var(--slate-100);
@@ -330,6 +348,8 @@ header {
     cursor: pointer;
     color: var(--slate-600);
     transition: all 0.2s;
+    margin-bottom: 2px;
+    /* Align slightly better with text bottom */
 }
 
 .action-btn:hover {
@@ -378,8 +398,30 @@ header {
     align-items: center;
     justify-content: center;
     font-size: 40px;
-    margin-bottom: 24px;
+    margin-bottom: 32px;
+    /* Increased from 24px */
     animation: scaleIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.completion-overlay h2 {
+    margin-bottom: 24px;
+    font-size: 32px;
+    color: var(--slate-900);
+}
+
+.completion-overlay p {
+    font-size: 18px;
+    line-height: 1.8;
+    /* Increased line-height for better spacing */
+    color: var(--slate-600);
+    max-width: 600px;
+    margin-bottom: 40px;
+    /* Space before button */
+}
+
+.completion-overlay .btn-primary {
+    padding: 14px 32px;
+    font-size: 16px;
 }
 
 @keyframes scaleIn {
@@ -447,17 +489,32 @@ header {
     background: white;
     width: 100%;
     max-width: 500px;
+    max-height: 90vh;
+    /* Limit to 90% of viewport height */
     border-radius: 20px;
-    padding: 32px;
     box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
     text-align: left;
-    /* Ensure instructions are left-aligned */
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    /* Prevent outer scroll */
 }
 
 .settings-modal h2 {
     font-size: 24px;
-    margin-bottom: 16px;
+    margin: 0;
+    padding: 24px 32px 16px 32px;
     color: var(--slate-800);
+    flex-shrink: 0;
+    /* Fixed header */
+    border-bottom: 1px solid var(--slate-100);
+}
+
+.settings-modal .modal-content {
+    flex: 1;
+    overflow-y: auto;
+    /* Scrollable content area */
+    padding: 20px 32px;
 }
 
 .settings-modal p {
@@ -509,6 +566,11 @@ header {
     display: flex;
     justify-content: flex-end;
     gap: 12px;
+    padding: 16px 32px 24px 32px;
+    border-top: 1px solid var(--slate-100);
+    flex-shrink: 0;
+    /* Fixed footer */
+    background: white;
 }
 
 .btn-secondary {
@@ -582,4 +644,248 @@ header {
     font-size: 12px;
     margin-bottom: 10px;
     font-weight: 600;
+}
+
+/* ========================================
+   RESPONSIVE DESIGN - Media Queries
+   ======================================== */
+
+/* Tablet (Portrait) - 768px and below */
+@media (max-width: 768px) {
+    header {
+        padding: 16px 24px;
+    }
+
+    .settings-icon {
+        top: 16px;
+        right: 24px;
+    }
+
+    .logo {
+        font-size: 20px;
+    }
+
+    .landing-content {
+        gap: clamp(12px, 2vh, 24px);
+        height: calc(100vh - 60px);
+    }
+
+    .title-image {
+        max-height: 50vh;
+        /* Reduce video size on tablets */
+        width: 85%;
+    }
+
+    .main-upload-btn {
+        font-size: clamp(14px, 2vw, 18px);
+        padding: clamp(14px, 2vh, 18px) clamp(28px, 4vw, 40px);
+    }
+
+    .container {
+        padding: 16px;
+    }
+}
+
+/* Mobile (Portrait) - 480px and below */
+@media (max-width: 480px) {
+    header {
+        padding: 12px 16px;
+    }
+
+    .settings-icon {
+        top: 12px;
+        right: 16px;
+        font-size: 20px;
+    }
+
+    .logo {
+        font-size: 18px;
+    }
+
+    .landing-content {
+        gap: clamp(8px, 1.5vh, 16px);
+        height: calc(100vh - 48px);
+        padding: clamp(4px, 1vh, 12px);
+    }
+
+    .title-image {
+        max-height: 40vh;
+        /* Further reduce video on mobile */
+        width: 90%;
+        margin-bottom: clamp(-30px, -3vh, -40px);
+    }
+
+    .main-upload-btn {
+        font-size: 14px;
+        padding: 12px 24px;
+        gap: 8px;
+    }
+
+    .main-upload-btn .btn-icon svg {
+        width: 18px;
+        height: 18px;
+    }
+
+    .landing-footer {
+        font-size: 9px;
+        bottom: 4px;
+        right: 12px;
+    }
+
+    .settings-modal {
+        max-width: 95%;
+        border-radius: 16px;
+    }
+
+    .settings-modal h2 {
+        font-size: 20px;
+        padding: 20px 20px 12px 20px;
+    }
+
+    .settings-modal .modal-content {
+        padding: 16px 20px;
+    }
+
+    .modal-actions {
+        padding: 12px 20px 20px 20px;
+        flex-direction: column;
+    }
+
+    .btn-primary,
+    .btn-secondary {
+        width: 100%;
+    }
+}
+
+/* Small Mobile - 375px and below */
+@media (max-width: 375px) {
+    .title-image {
+        max-height: 35vh;
+    }
+
+    .main-upload-btn {
+        font-size: 13px;
+        padding: 10px 20px;
+    }
+}
+
+/* Academic Roadmap */
+.roadmap-container {
+    text-align: left;
+    margin: 10px 0;
+    width: 100%;
+    animation: fadeIn 0.5s ease-out;
+}
+
+.roadmap-title {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--slate-900);
+    margin-bottom: 20px;
+}
+
+.roadmap-section {
+    margin-bottom: 24px;
+}
+
+.roadmap-section-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--slate-600);
+    margin-bottom: 12px;
+}
+
+.roadmap-row {
+    display: flex;
+    flex-wrap: nowrap;
+    /* Keep everything in a single line */
+    gap: 8px;
+    overflow-x: auto;
+    /* Allow scrolling if it overflows */
+    padding-bottom: 10px;
+    /* Space for scrollbar */
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Custom scrollbar for roadmap */
+.roadmap-row::-webkit-scrollbar {
+    height: 4px;
+}
+
+.roadmap-row::-webkit-scrollbar-track {
+    background: #f1f5f9;
+}
+
+.roadmap-row::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 4px;
+}
+
+.roadmap-column {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+
+.roadmap-box {
+    width: 28px;
+    height: 28px;
+    background: #e2e8f0;
+    color: #475569;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 13px;
+    position: relative;
+    transition: all 0.3s ease;
+}
+
+.roadmap-box.completed {
+    background: #3b82f6;
+    color: white;
+    box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.2);
+}
+
+.roadmap-box .tick {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    font-size: 7px;
+    color: white;
+    font-weight: 900;
+}
+
+.roadmap-grade-box {
+    width: 16px;
+    height: 12px;
+    background: #334155;
+    color: #cbd5e1;
+    border-radius: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 7px;
+    font-weight: 800;
+    transition: all 0.3s ease;
+}
+
+.roadmap-grade-box.completed {
+    background: #3b82f6;
+    color: white;
+    opacity: 0.9;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
