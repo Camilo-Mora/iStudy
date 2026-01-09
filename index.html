@@ -414,25 +414,36 @@
                 if (!file) return;
 
                 setView('chat');
+
+                const allowedExtensions = ['.txt', '.md', '.png', '.jpg', '.jpeg'];
+                const isImage = file.type.startsWith('image/');
+                const hasValidExt = allowedExtensions.some(ext => file.name.toLowerCase().endsWith(ext));
+
+                if (!isImage && !hasValidExt) {
+                    addMessage('system', "We only process .png, .txt, and .md files. If you did your essay in a different program like Word or Excel, simply open your file in that program, click on \"Save As\" and find the option for .txt. That will create the file in the format we need here.");
+                    addMessage('system', null, 'reupload_action');
+                    return;
+                }
+
                 setIsProcessing(true);
 
                 if (!file.type.startsWith('image/')) {
                     addMessage('system', "💡 **Did you know?**\nResearch shows that handwriting responses significantly improves conceptual understanding and retention compared to typing. While I can process digital text, I highly encourage using handwritten notes for your own learning benefit.");
                 }
 
-                addMessage('system', `Hello! File **${file.name}** received. I am processing your content now...`);
+                // addMessage('system', `Hello! File **${file.name}** received. I am processing your content now...`);
 
                 try {
                     const extraction = await window.Core.ExtractDataFromUploadedFile(file);
-                    addMessage('system', "### Extracted Text:\n" + extraction.full_text);
+                    // addMessage('system', "### Extracted Text:\n" + extraction.full_text);
                     window.lastTranscribed = extraction.transcribed_responses;
                     window.lastRawText = extraction.full_text;
 
                     if (extraction.detected_chapter) {
                         setSuggestedChapter(extraction.detected_chapter);
-                        addMessage('system', `Extraction complete! I detected **Chapter ${extraction.detected_chapter}**. Is this correct? (Yes/No)`);
+                        addMessage('system', `I detected **Chapter ${extraction.detected_chapter}**. Is this correct? (Yes/No)`);
                     } else {
-                        addMessage('system', "Extraction complete! However, I couldn't find a chapter number in your file. **Which chapter is this for?** (e.g., 1)");
+                        addMessage('system', "I couldn't find a chapter number in your file. Which chapter is this for? (e.g., 1)");
                     }
                 } catch (err) {
                     addMessage('system', "Error processing file: " + err.message);
@@ -443,18 +454,16 @@
 
             const handleChapterSelected = async (chapterNum) => {
                 setIsProcessing(true);
-                addMessage('system', `Fetching materials for Chapter **${chapterNum}**...`);
+                addMessage('system', "I am processing your responses... this may take a moment");
                 try {
                     const data = await window.Core.FetchChapterData(chapterNum);
 
                     const questionCount = data.questions.length;
 
                     // Attempt Smart Segmentation
-                    addMessage('system', `Analyzing your responses for ${questionCount} questions...`);
                     const smartResult = await window.Core.SmartParseResponses(window.lastRawText || "", questionCount, chapterNum);
 
                     if (smartResult && smartResult.responses) {
-                        addMessage('system', `Smart analysis complete. I consolidated your input into ${smartResult.responses.length} distinct responses.`);
                         window.lastTranscribed = smartResult.responses;
                     } else if (smartResult && smartResult.error) {
                         if (smartResult.error.toLowerCase().includes('quota') || smartResult.error.includes('429')) {
@@ -471,7 +480,6 @@
                     const responseCount = window.lastTranscribed ? window.lastTranscribed.length : 0;
 
                     console.log(`DEBUG: questionCount=${questionCount}, responseCount=${responseCount}`);
-                    addMessage('system', `📊 **Validation Check**: Chapter has ${questionCount} questions. Your sheet has ${responseCount} responses.`);
 
                     if (questionCount !== responseCount) {
                         addMessage('system', `❌ **Mismatch Detected!** Chapter ${chapterNum} has ${questionCount} questions, but your response sheet has ${responseCount} responses. Please upload a completed response sheet. Ensure to clearly enumerate your responses.`);
@@ -481,7 +489,6 @@
                     }
 
                     // BATCH ANALYSIS START
-                    addMessage('system', "Great! Counts match. 🧠 **Drafting initial review for all questions...** (This may take a moment)");
 
                     try {
                         const analysisResults = await window.Core.BatchAnalyzeResponses(
@@ -721,16 +728,15 @@ Compare the **Student Explanation** against the **Key Concepts**. Identify what 
 ### OUTPUT FORMAT
 Keep the response visual and scannable. Do not use complex headers. Follow this exact structure:
 
-**1. Greeting**
+**Greeting**
 A single, warm sentence acknowledging the student's help.
 
 * **What was clear:** Use ✅ for every specific concept the student explained correctly.
 * **What is confusing:** Use ❓ for concepts that were missing or vague in the student's explanation. Frame this as **your** (Tontin's) confusion or memory gap.
 
-**2. Assessment**
-* Give a qualitative assessment of "Completeness" (Low, Medium, High).
-* If "High": Thank them for being a great teacher.
-* If "Low/Medium": Say, "I think I get most of it, but I might re-watch the part about [Missing Concept] just to be safe."
+**My assessment:** [Low, Medium, or High]. 
+* If **High**: "This is great clear now."
+* If **Medium or Low**: "I am still not fully clear about this response, I will watch that part of the video again to be certain."
 
 ### TONE RULES
 * **Be specific:** State exactly what concept you are referring to in each point.
@@ -741,11 +747,13 @@ A single, warm sentence acknowledging the student's help.
                         const tontinEval = await window.InvokeLLM(tontinEvalPrompt, commonContext);
                         addMessage('tontin', tontinEval);
 
-                        // Always move to Pinocchio after Tontin's feedback
-                        await new Promise(r => setTimeout(r, 1500));
-                        setReviewStep(2);
-                        setTimeout(() => runNextStep(qIdx, 2, ""), 100);
+                        // Transition to Joker
                         setIsProcessing(false);
+                        setTimeout(() => {
+                            setReviewStep(2);
+                            addMessage('joker', "My turn! Can I go next?");
+                            setIsWaitingForAvatarStart(true);
+                        }, 1500);
                     }
                 }
 
@@ -892,9 +900,9 @@ Output only your peer-style feedback as Joker.`;
                         setSubmission(prev => ({ ...prev, student_email: text }));
                         setIsVerifyingEmail(false);
                         setIsWaitingForOTP(true);
-                        addMessage('system', `Great, I found you in the GEO309 roster. I just sent a **3-digit verification code** to **${text}**. \n\nPlease enter the code below to unlock your session.`);
+                        addMessage('system', "I just sent a 3-digit verification code to your email. Please enter that code below to unlock your session. \n\n*If the message is not in your Inbox, check your **Spam** or **Promotions** folder.*");
                     } else {
-                        addMessage('system', `❌ **Verification Error:** ${res.message || "Email not found in our records."} \n\nPlease double-check the spelling.`);
+                        addMessage('system', "❌ Your email was not found in the roster of this class. Please verify if this is the email you used to register or if you misspelled it, and try typing your email again. If that does not work, reach out to the Registrar's Office, as you do not appear to be registered in this class. If you are, please contact Dr. Mora.");
                     }
                     return;
                 }
