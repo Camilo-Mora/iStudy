@@ -269,10 +269,12 @@
                 const paddedNum = chNum.toString().padStart(2, '0');
 
                 // Matches standard course naming: "Chapter 01" or "Video 06"
+                // Matches standard course naming: "Chapter 01" or "Video 06"
                 const chapterLabel = isVideo ? `Video ${paddedNum}` : `Chapter ${paddedNum}`;
 
                 const payload = {
-                    studentId: email,
+                    email: email,
+                    studentId: email, // Universal key compatibility
                     chapter: chapterLabel
                 };
 
