@@ -114,7 +114,9 @@
                 `;
 
                 try {
-                    const data = await window.Core.GeminiRequest('gemini-2.5-flash', prompt);
+                    // Read preference
+                    const preferredModel = localStorage.getItem('iStudy_preferred_model') || 'gemini-3-flash';
+                    const data = await window.Core.GeminiRequest(preferredModel, prompt);
 
                     let text = data.candidates[0].content.parts[0].text;
                     console.log("LLM Raw Response:", text);
@@ -134,7 +136,7 @@
                     console.error("Smart Parse Error:", err);
                     const msg = err.message || "";
                     if (msg.toLowerCase().includes("quota") || msg.toLowerCase().includes("limit") || msg.toLowerCase().includes("429")) {
-                        return { responses: null, error: "⚠️ **Quota Limit Reached!** You have reached your Google API limit. \n\n**What to do:** \n1. Wait for it to reset (usually 15-60 minutes). \n2. OR, generate a new API key using a **different personal Gmail account** and update it via the ⚙️ icon. \n3. OR, ensure you aren't using your UH email (which doesn't support API keys)." };
+                        return { responses: null, error: "⚠️ **Quota Limit Reached!** You have reached your Google API limit. \n\n**What to do:** \n1. Wait for it to reset (midnight Pacific Time). \n2. OR, generate a new API key using a **different personal Gmail account** and update it via the ⚙️ icon. Our app will loop over available API keys you have saved. \n\n*Note: UH emails DO NOT support API keys.*" };
                     }
                     return { responses: null, error: msg };
                 }
@@ -158,46 +160,65 @@
                 keys = keys.filter(k => k && k.key && k.key.trim().length > 10);
                 if (keys.length === 0) throw new Error("No valid API Keys available.");
 
-                let lastError = null;
+                // Normalize model input or use default from localStorage if available in context, else hard default
+                // Normalize model input or use default from localStorage if available in context, else hard default
+                let targetModel = model || 'gemini-3-flash-preview';
 
-                for (let i = 0; i < keys.length; i++) {
-                    const kObj = keys[i];
-                    const apiKey = kObj.key.trim();
-                    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+                // Strict Chain: Only use the two verified working models
+                // If user selected 2.5, try that first, then 3-preview.
+                // If user selected 3 (or anything else), try 3-preview first, then 2.5.
+                let uniqueChain = [];
+                if (targetModel === 'gemini-2.5-flash') {
+                    uniqueChain = ['gemini-2.5-flash', 'gemini-3-flash-preview'];
+                } else {
+                    uniqueChain = ['gemini-3-flash-preview', 'gemini-2.5-flash'];
+                }
 
-                    try {
-                        console.log(`AiCall [${kObj.label || 'Default'}]: Requesting...`);
-                        const response = await fetch(url, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ contents: [{ parts: [{ text: promptText }] }] })
-                        });
+                const errorLog = [];
 
-                        const data = await response.json();
+                // DEEP LOOP: Iterate through Models first, then Keys
+                for (const currentModel of uniqueChain) {
+                    console.log(`[Core] Attempting Model Phase: ${currentModel}`);
 
-                        if (data.error) {
-                            const msg = data.error.message || JSON.stringify(data.error);
-                            if (msg.includes('429') || msg.toLowerCase().includes('quota') || msg.toLowerCase().includes('resource exhausted')) {
-                                console.warn(`AiCall [${kObj.label}]: Quota Hit. Switching Key...`);
-                                lastError = new Error("Quota Limit Reached");
-                                continue;
+                    for (let i = 0; i < keys.length; i++) {
+                        const kObj = keys[i];
+                        const apiKey = kObj.key.trim();
+                        const url = `https://generativelanguage.googleapis.com/v1beta/models/${currentModel}:generateContent?key=${apiKey}`;
+
+                        try {
+                            console.log(`AiCall [Key: ${kObj.label || 'Default'} | Model: ${currentModel}]: Requesting...`);
+                            const response = await fetch(url, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ contents: [{ parts: [{ text: promptText }] }] })
+                            });
+
+                            const data = await response.json();
+
+                            if (data.error) {
+                                const msg = data.error.message || JSON.stringify(data.error);
+                                const errStr = `[${currentModel}]: ${msg}`;
+                                console.warn(errStr);
+                                errorLog.push(errStr);
+                                continue; // Try next key/model
                             }
-                            throw new Error(msg);
-                        }
 
-                        return data; // Success
+                            return data; // Success!
 
-                    } catch (err) {
-                        const msg = err.message || "";
-                        if (msg.includes('429') || msg.toLowerCase().includes('quota') || msg.toLowerCase().includes('resource exhausted')) {
-                            console.warn(`AiCall [${kObj.label}]: Quota Hit (Fetch). Switching Key...`);
-                            lastError = new Error("Quota Limit Reached");
+                        } catch (err) {
+                            const msg = err.message || "Network/Fetch Error";
+                            const errStr = `[${currentModel} Net]: ${msg}`;
+                            console.warn(errStr);
+                            errorLog.push(errStr);
                             continue;
                         }
-                        throw err;
                     }
                 }
-                throw lastError || new Error("All API Keys exhausted.");
+
+                // If we get here, all failed.
+                const finalMsg = "Unable to generate response. All models failed:\n" + errorLog.join("\n");
+                console.error(finalMsg);
+                throw new Error(finalMsg);
             },
 
             BatchAnalyzeResponses: async (transcript, questions, studentResponses) => {
@@ -224,7 +245,9 @@
                 `;
 
                 try {
-                    const data = await window.Core.GeminiRequest('gemini-2.5-flash', prompt);
+                    // Use user preference for batch analysis too
+                    const preferredModel = localStorage.getItem('iStudy_preferred_model') || 'gemini-3-flash';
+                    const data = await window.Core.GeminiRequest(preferredModel, prompt);
                     let raw = data.candidates[0].content.parts[0].text;
                     console.log("Batch Analysis Raw Response:", raw);
                     const jsonMatch = raw.match(/\[[\s\S]*\]/);
@@ -316,17 +339,17 @@
                 console.error("Gemini API Error:", err);
                 const msg = err.message || "";
                 if (msg.toLowerCase().includes("quota") || msg.toLowerCase().includes("limit") || msg.toLowerCase().includes("429")) {
-                    return "System📚: ⚠️ **Quota Limit Reached!** You have reached your Google API limit. \n\n**What to do:** \n1. Wait for it to reset (usually 15-60 minutes). \n2. OR, generate a new API key using a **different personal Gmail account** and update it via the ⚙️ icon. \n3. OR, ensure you aren't using your UH email (which doesn't support API keys).";
+                    return "System: ⚠️ **Quota Limit Reached!** You have reached your Google API limit. \n\n**What to do:** \n1. Wait for it to reset (usually 15-60 minutes). \n2. OR, generate a new API key using a **different personal Gmail account** and update it via the ⚙️ icon. \n\n*Note: UH emails DO NOT support API keys.*";
                 }
-                return `System📚: Error calling Gemini AI. Check your API key or connection. Details: ${msg}`;
+                return `System: Error calling Gemini AI. Check your API key or connection. Details: ${msg}`;
             }
         };
 
         const characters = {
-            newton: { name: "Newton", emoji: "🧠", avatarClass: "avatar-newton" },
-            tontin: { name: "Tontin", emoji: "🤔", avatarClass: "avatar-tontin" },
-            joker: { name: "Joker", emoji: "🃏", avatarClass: "avatar-joker" },
-            system: { name: "System", emoji: "📚", avatarClass: "avatar-system" },
+            newton: { name: "Newton", emoji: "", avatarClass: "avatar-newton" },
+            tontin: { name: "Tontin", emoji: "", avatarClass: "avatar-tontin" },
+            joker: { name: "Joker", emoji: "", avatarClass: "avatar-joker" },
+            system: { name: "System", emoji: "", avatarClass: "avatar-system" },
             user: { name: "Student", emoji: "👤", avatarClass: "" }
         };
 
@@ -357,6 +380,10 @@
             const [isWaitingForAvatarStart, setIsWaitingForAvatarStart] = useState(false);
             const [isWaitingForNextQuestion, setIsWaitingForNextQuestion] = useState(false);
             const [isWaitingForCompilation, setIsWaitingForCompilation] = useState(false);
+            const [isWaitingForIntroDisclaimer, setIsWaitingForIntroDisclaimer] = useState(false);
+
+            // Model Selection State
+            const [selectedModel, setSelectedModel] = useState(localStorage.getItem('iStudy_preferred_model') || 'gemini-3-flash');
 
             const [submission, setSubmission] = useState({
                 student_email: '',
@@ -467,7 +494,7 @@
                         window.lastTranscribed = smartResult.responses;
                     } else if (smartResult && smartResult.error) {
                         if (smartResult.error.toLowerCase().includes('quota') || smartResult.error.includes('429')) {
-                            addMessage('system', "⚠️ **Quota Limit Reached!** You have reached your Google API limit. \n\n**What to do:** \n1. Wait for it to reset (usually 15-60 minutes). \n2. OR, generate a new API key using a **different personal Gmail account** and update it via the ⚙️ icon. \n3. OR, ensure you aren't using your UH email (which doesn't support API keys).");
+                            addMessage('system', "⚠️ **Quota Limit Reached!** You have reached your Google API limit. \n\n**What to do:** \n1. Wait for it to reset (midnight Pacific Time). \n2. OR, generate a new API key using a **different personal Gmail account** and add it via the ⚙️ icon. Our app will loop over available API keys you have saved. \n\n*You cannot use your UH email account because it does not support API Keys.*");
                             // setShowSettings(true); // User requested manual open
                             setIsProcessing(false);
                             return; // STOP HERE
@@ -514,19 +541,30 @@
                             status: 'reviewing'
                         }));
 
-                        addMessage('system', "Let's review your responses one by one. Are you ready?");
+                        const chaptersCompleted = roadmapData ? Object.keys(roadmapData).filter(k =>
+                            (k.toLowerCase().includes('chapter') || k.toLowerCase().includes('video')) && roadmapData[k]
+                        ).length : 0;
 
-                        // Wait for user to say they are ready
+                        if (chaptersCompleted === 0) {
+                            addMessage('system', "Here we will review your responses. This may take up to 60 minutes, ensure you have that time available until you finish, as partial work cannot be saved. \n\nOur purpose here is threefold: 1) ensure that you collected the correct information, 2) that you understand the information, and 3) that you can critically use it. For that you will interact with three different AI agents. Ready to meet them?");
+                            setIsWaitingForIntroDisclaimer(true);
+                        } else if (chaptersCompleted < 4) {
+                            addMessage('system', "Remember you need at least 60 minutes to finish this work, and that you will be talking to three different AI agents. Ready to meet them?");
+                            setIsWaitingForIntroDisclaimer(true);
+                        } else {
+                            addMessage('system', "Remember we need at least 60 minutes to finish reviewing your responses. Are you ready?");
+                            setIsWaitingForReviewStart(true);
+                        }
+
                         setCurrentQIndex(0);
                         setReviewStep(0);
-                        setIsWaitingForReviewStart(true);
                         setIsProcessing(false);
 
                     } catch (err) {
 
                         const msg = err.message || String(err);
                         if (msg.includes('429') || msg.toLowerCase().includes('quota')) {
-                            addMessage('system', "⚠️ **Quota Limit Reached!** You have reached your Google API limit. \n\n**What to do:** \n1. Wait for it to reset (usually 15-60 minutes). \n2. OR, generate a new API key using a **different personal Gmail account** and update it via the ⚙️ icon. \n3. OR, ensure you aren't using your UH email (which doesn't support API keys).");
+                            addMessage('system', "⚠️ **Quota Limit Reached!** You have reached your Google API limit. \n\n**What to do:** \n1. Wait for it to reset (midnight Pacific Time). \n2. OR, generate a new API key using a **different personal Gmail account** and add it via the ⚙️ icon. Our app will loop over available API keys you have saved. \n\n*You cannot use your UH email account because it does not support API Keys.*");
                             // setShowSettings(true); // User requested manual open
                         } else {
                             addMessage('system', "Error during batch analysis: " + msg);
@@ -554,31 +592,15 @@
                     return;
                 }
 
-                if (qIdx > 0) {
-                    addMessage('system', "🛑 **Testing Mode**: Stopped after Question 1 as requested. Let me compile the report for you now.");
-                    setTimeout(() => {
-                        addMessage('system', 'Generating your report...', 'report');
-                    }, 1500);
-                    return;
-                }
 
-                // Update final response with latest student input if relevant
-                if (studentMsg) {
-                    setSubmission(prev => {
-                        const newQs = [...prev.questions];
-                        // We append interactions to the final response or keep it as the latest valid answer? 
-                        // For now, let's keep the most recent student text as the "final" candidate, 
-                        // though in reality we might want to consolidate.
-                        newQs[qIdx] = { ...newQs[qIdx], final_response: studentMsg };
-                        return { ...prev, questions: newQs };
-                    });
-                }
+                // Removed the greedy update that was overwriting final_response with conversational 'Yes/No' messages.
+                // Newton's phase (Step 0) now explicitly handles the final_response lock-in.
 
                 // NEW: Skip introductions if any chapter/video is already completed
                 const chaptersCompleted = roadmapData ? Object.keys(roadmapData).filter(k =>
                     (k.toLowerCase().includes('chapter') || k.toLowerCase().includes('video')) && roadmapData[k]
                 ).length : 0;
-                const skipIntro = chaptersCompleted >= 1;
+                const skipIntro = chaptersCompleted >= 4;
 
                 // LIGHTWEIGHT CONTEXT - Uses Pre-calc Model Answer instead of full Transcript
                 const analysis = q.analysis || {};
@@ -593,30 +615,25 @@
                 if (step === 0) {
                     if (!studentMsg) {
                         setIsProcessing(true);
-
-                        if (!hasIntroduced.newton && !skipIntro) {
-                            addMessage('newton', "I am Newton. My job is to measure the accuracy of your logic against the lecture material. I’ll provide a score and feedback to help you calibrate your understanding. Don't worry—this isn't a grade; it’s a diagnostic tool to help you sharpen your focus for future videos.");
-                            setHasIntroduced(prev => ({ ...prev, newton: true }));
-                            await new Promise(r => setTimeout(r, 1000));
-                            addMessage('newton', "Can we start?");
-                            setIsWaitingForAvatarStart(true);
-                            setIsProcessing(false);
-                            return;
-                        }
                         const report = `
 ### Question ${q.question_number}
-**Question:** ${q.question_text}
+#### Question:
+${q.question_text}
 
-**Your Response:** ${q.student_response}
+#### Your Response:
+${q.student_response}
 
-**Score:** ${analysis.grade}/5
+#### Score:
+${analysis.grade}/5
 
-**Feedback:** ${analysis.critique}
+#### Feedback:
+${analysis.critique}
 
-**Model Answer (AI):** ${analysis.model_answer}
+#### Model Answer(AI):
+${analysis.model_answer}
 
 ${analysis.timestamp ? `***I found this response around minute ${analysis.timestamp} of the video.***` : ''}
-`;
+                        `;
                         addMessage('newton', report);
                         setTimeout(() => {
                             addMessage('newton', "Do you agree with this assessment? (Type **'Yes'** to accept the Model Answer, or provide a better explanation/argument to improve your score.)");
@@ -643,8 +660,8 @@ ${analysis.timestamp ? `***I found this response around minute ${analysis.timest
                                 Student's New Explanation: "${studentMsg}"
                                 
                                 Provide STRICTLY a JSON object with:
-                                - "grade": Number (1-5).
-                                - "critique": String (feedback on the new explanation).
+                        - "critique": String(feedback on the new explanation).
+                                - "updated_model_answer": String(The original Model Answer, but updated to seamlessly incorporate any valid new details from the student's explanation. If the student's point is invalid, keep it unchanged).
                                 
                                 No markdown, just JSON.
                             `;
@@ -652,13 +669,17 @@ ${analysis.timestamp ? `***I found this response around minute ${analysis.timest
                             try {
                                 const resText = await window.InvokeLLM(reEvalPrompt, commonContext);
                                 const jsonMatch = resText.match(/\{[\s\S]*\}/);
-                                const newEval = jsonMatch ? JSON.parse(jsonMatch[0]) : { grade: analysis.grade, critique: "I've reviewed your update." };
+
+                                const newEval = jsonMatch ? JSON.parse(jsonMatch[0]) : { critique: "I've reviewed your update.", updated_model_answer: analysis.model_answer };
+
+                                // Ensure we have a valid model answer fallback
+                                const finalModelAnswer = newEval.updated_model_answer || analysis.model_answer;
 
                                 setSubmission(prev => {
                                     const newQs = [...prev.questions];
                                     newQs[qIdx] = {
                                         ...newQs[qIdx],
-                                        analysis: { ...newQs[qIdx].analysis, ...newEval },
+                                        analysis: { ...newQs[qIdx].analysis, ...newEval, model_answer: finalModelAnswer },
                                         student_response: studentMsg
                                     };
                                     return { ...prev, questions: newQs };
@@ -666,21 +687,23 @@ ${analysis.timestamp ? `***I found this response around minute ${analysis.timest
 
                                 const report = `
 ### Question ${q.question_number}
-**Question:** ${q.question_text}
+#### Question:
+${q.question_text}
 
-**Your Response:** ${studentMsg}
+#### Your Additional Comment:
+${studentMsg}
 
-**Score:** ${newEval.grade}/5
+#### Feedback:
+${newEval.critique}
 
-**Feedback:** ${newEval.critique}
-
-**Model Answer (AI):** ${analysis.model_answer}
+#### Model Answer (AI):
+${finalModelAnswer}
 
 ${analysis.timestamp ? `***I found this response around minute ${analysis.timestamp} of the video.***` : ''}
 `;
                                 addMessage('newton', report);
                                 setTimeout(() => {
-                                    addMessage('newton', "Do you agree with this assessment? (Type **'Yes'** to accept the Model Answer, or provide a better explanation/argument to improve your score.)");
+                                    addMessage('newton', "Do you agree with this assessment? (Type **'Yes'** to accept this Updated Model Answer, or provide further explanation.)");
                                     setIsProcessing(false);
                                 }, 1000);
                             } catch (err) {
@@ -699,24 +722,14 @@ ${analysis.timestamp ? `***I found this response around minute ${analysis.timest
                     if (!studentMsg) {
                         setIsProcessing(true);
 
-                        if (!hasIntroduced.tontin && !skipIntro) {
-                            addMessage('tontin', "My name is Tontin. I will always ask you to explain the material in your own words. My role is to ensure you have a confident grasp of the course content and can express complex ideas clearly and independently.");
-                            setHasIntroduced(prev => ({ ...prev, tontin: true }));
-                            await new Promise(r => setTimeout(r, 1000));
-                            addMessage('tontin', "Can we start?");
-                            setIsWaitingForAvatarStart(true);
-                            setIsProcessing(false);
-                            return;
-                        }
-
                         await new Promise(r => setTimeout(r, 600));
-                        addMessage('tontin', "Can you explain this response to me using your own words?");
+                        addMessage('tontin', `I’m still a bit lost on this one—could you explain it to me in a different way? How would you explain this to a grandma? \n\n**The Question:** ${q.question_text}`);
                         setIsProcessing(false);
                         return;
                     } else {
                         setIsProcessing(true);
                         const tontinEvalPrompt = `### ROLE
-You are "Tontin," a friendly, humble peer student. You are not a professor. You rely on the User to explain the lecture content to you because you often miss the details.
+You are "Tontin," a friendly, humble peer student. You are not a professor. You rely on the User to explain the lecture content correctly.
 
 ### INPUT DATA
 1. **Student Explanation:** "${studentMsg}"
@@ -725,23 +738,35 @@ You are "Tontin," a friendly, humble peer student. You are not a professor. You 
 ### TASK
 Compare the **Student Explanation** against the **Key Concepts**. Identify what was explained well and what I (Tontin) am still confused about.
 
+### CRITICAL RULE
+**DO NOT ASK ANY QUESTIONS.** Do not use phrases like "Does that make sense?" or "Can you clarify?". The student cannot respond to this message. Simply state your assessment.
+
 ### OUTPUT FORMAT
-Keep the response visual and scannable. Do not use complex headers. Follow this exact structure:
+You must follow this EXACT structure. Use Headers (###) for sections and NO bullet points (*).
 
-**Greeting**
-A single, warm sentence acknowledging the student's help.
+### Greeting
+A single, warm sentence acknowledging the student's help (e.g., "Thanks for explaining that!"). Do not ask how I am or if I understood.
 
-* **What was clear:** Use ✅ for every specific concept the student explained correctly.
-* **What is confusing:** Use ❓ for concepts that were missing or vague in the student's explanation. Frame this as **your** (Tontin's) confusion or memory gap.
+### What was clear: 
+
+✅ [First concept you understood clearly]
+✅ [Second concept if applicable]
+
+### What is confusing: 
+
+❓ [First concept that remains missing or vague in their explanation]
+❓ [Second concept if applicable]
 
 **My assessment:** [Low, Medium, or High]. 
-* If **High**: "This is great clear now."
-* If **Medium or Low**: "I am still not fully clear about this response, I will watch that part of the video again to be certain."
+
+* If **High**: "This is great, it is clear to me now."
+* If **Medium or Low**: "I am still not fully clear about this response; I will watch that part of the video again to be certain."
 
 ### TONE RULES
+* **No Questions:** Under no circumstances should you ask a question. The student cannot reply.
 * **Be specific:** State exactly what concept you are referring to in each point.
-* **Be humble:** Always frame missing info as something you missed or didn't understand. Use phrases like "I'm unsure about..." or "I missed the part about...".
-* **Formatting:** Put the emoji at the start of the line.
+* **Be humble:** Always frame missing info as something you missed or didn't understand. 
+* **Formatting:** Use distinctive bullet points as shown above and ensure there is clear spacing between sections.
 `;
 
                         const tontinEval = await window.InvokeLLM(tontinEvalPrompt, commonContext);
@@ -761,16 +786,6 @@ A single, warm sentence acknowledging the student's help.
                 else if (step === 2) {
                     if (!studentMsg) {
                         setIsProcessing(true);
-
-                        if (!hasIntroduced.joker && !skipIntro) {
-                            addMessage('joker', "My name is Joker. I may or may not attempt to deceive you with my statements. My role is to help you become a critical thinker by challenging you to distinguish between accurate, partially correct, and completely false information.");
-                            setHasIntroduced(prev => ({ ...prev, joker: true }));
-                            await new Promise(r => setTimeout(r, 1000));
-                            addMessage('joker', "Can we start?");
-                            setIsWaitingForAvatarStart(true);
-                            setIsProcessing(false);
-                            return;
-                        }
 
                         // Randomly choose mode (50/50 chance)
                         const mode = Math.random() < 0.5 ? "TRUTHFUL" : "DECEPTIVE";
@@ -844,11 +859,42 @@ Output only your peer-style feedback as Joker.`;
 
                         // Move to next question after Joker feedback
                         setTimeout(() => {
-                            addMessage('system', "Can we move to the next question?");
-                            setIsWaitingForNextQuestion(true);
+                            if (qIdx < submission.questions.length - 1) {
+                                addMessage('system', "Can we move to the next question?");
+                                setIsWaitingForNextQuestion(true);
+                            } else {
+                                // Automatically trigger the "all reviewed" message from runNextStep
+                                runNextStep(qIdx + 1, 0);
+                            }
                         }, 1000);
                     }
                 }
+            };
+
+            const runAvatarIntroductions = async () => {
+                setIsProcessing(true);
+                const chaptersCompleted = roadmapData ? Object.keys(roadmapData).filter(k =>
+                    (k.toLowerCase().includes('chapter') || k.toLowerCase().includes('video')) && roadmapData[k]
+                ).length : 0;
+
+                if (chaptersCompleted === 0) {
+                    // Full Ceremony
+                    addMessage('newton', "I am Newton. My job is to measure the accuracy of your logic against the lecture material. I’ll provide a score and feedback to help you calibrate your understanding. Don't worry—this isn't a grade; it’s a diagnostic tool to help you sharpen your focus for future videos.");
+                    await new Promise(r => setTimeout(r, 2000));
+                    addMessage('tontin', "My name is Tontin. I will always ask you to explain the material in your own words. My role is to ensure you have a confident grasp of the course content and can express complex ideas clearly and independently.");
+                    await new Promise(r => setTimeout(r, 2000));
+                    addMessage('joker', "My name is Joker. I may or may not attempt to deceive you with my statements. My role is to help you become a critical thinker by challenging you to distinguish between accurate, partially correct, and completely false information.");
+                } else {
+                    // Team Huddle
+                    addMessage('newton', "Newton here. Ready to verify your responses.");
+                    addMessage('tontin', "Hi, this is Tontin, and I may still need you to explain things to me.");
+                    addMessage('joker', "This is Joker here... watch out, as I may pull some tricks on you.");
+                }
+
+                await new Promise(r => setTimeout(r, 2000));
+                addMessage('system', "**Let's review your responses one by one. Are you ready?**");
+                setIsWaitingForReviewStart(true);
+                setIsProcessing(false);
             };
 
             const handleVoiceInput = () => {
@@ -940,6 +986,12 @@ Output only your peer-style feedback as Joker.`;
                     return;
                 }
 
+                if (isWaitingForIntroDisclaimer) {
+                    setIsWaitingForIntroDisclaimer(false);
+                    runAvatarIntroductions();
+                    return;
+                }
+
                 if (isWaitingForReviewStart) {
                     setIsWaitingForReviewStart(false);
                     runNextStep(0, 0, "");
@@ -968,6 +1020,16 @@ Output only your peer-style feedback as Joker.`;
                 }
 
                 if (isEditing && (text.toLowerCase().includes('yes') || text.toLowerCase().includes('report') || text.toLowerCase().includes('ok'))) {
+                    // FIX: Commit the agreed model_answer to final_response before generating report
+                    setSubmission(prev => {
+                        const newQs = [...prev.questions];
+                        const q = newQs[currentQIndex];
+                        if (q && q.analysis && q.analysis.model_answer) {
+                            newQs[currentQIndex] = { ...q, final_response: q.analysis.model_answer };
+                        }
+                        return { ...prev, questions: newQs };
+                    });
+
                     setIsEditing(false);
                     addMessage('system', 'Generating your report...', 'report');
                     return;
@@ -1133,8 +1195,8 @@ Output only your peer-style feedback as Joker.`;
                                                     animate={{ opacity: 1, y: 0, scale: 1 }}
                                                     className={`message-wrapper ${msg.isAi ? 'message-ai' : 'message-user'}`}
                                                 >
-                                                    <div className={`avatar ${characters[msg.charKey]?.avatarClass || ''} `}>
-                                                        {characters[msg.charKey]?.emoji || '👤'}
+                                                    <div className={`avatar ${characters[msg.charKey]?.avatarClass || ''}`}>
+                                                        {!characters[msg.charKey]?.avatarClass ? (characters[msg.charKey]?.emoji || '👤') : null}
                                                     </div>
                                                     <div className="message-bubble">
                                                         {msg.type === 'report' ? (
@@ -1308,7 +1370,7 @@ Output only your peer-style feedback as Joker.`;
                                         </AnimatePresence>
                                         {isProcessing && (
                                             <div className="message-wrapper message-ai">
-                                                <div className="avatar avatar-system">📚</div>
+                                                <div className="avatar avatar-system"></div>
                                                 <div className="message-bubble">
                                                     <div className="loading-spinner"></div>
                                                 </div>
@@ -1342,22 +1404,52 @@ Output only your peer-style feedback as Joker.`;
                         view === 'chat' && (
                             <div className="input-fixed-container">
                                 <div className="input-box-wrapper">
-                                    <button className="action-btn" onClick={() => fileInputRef.current.click()}>+</button>
-                                    <textarea
-                                        ref={inputRef}
-                                        className="input-box"
-                                        placeholder={isProcessing ? "Processing..." : "Type your response..."}
-                                        value={inputValue}
-                                        onChange={(e) => setInputValue(e.target.value)}
-                                        onKeyDown={(e) => {
-                                            if (e.key === 'Enter' && !e.shiftKey) {
-                                                e.preventDefault();
-                                                handleSend();
-                                            }
-                                        }}
-                                        disabled={isProcessing}
-                                        rows="1"
-                                    />
+
+                                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                                        <textarea
+                                            ref={inputRef}
+                                            className="input-box"
+                                            placeholder={isProcessing ? "Processing..." : "Type your response..."}
+                                            value={inputValue}
+                                            onChange={(e) => setInputValue(e.target.value)}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter' && !e.shiftKey) {
+                                                    e.preventDefault();
+                                                    handleSend();
+                                                }
+                                            }}
+                                            disabled={isProcessing}
+                                            rows="1"
+                                            style={{ marginBottom: '2px' }}
+                                        />
+                                        <div style={{ fontSize: '0.75rem', color: '#5b6b7f', display: 'flex', alignItems: 'center', marginTop: '4px' }}>
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '2px' }}>
+                                                <polyline points="18 15 12 9 6 15"></polyline>
+                                            </svg>
+                                            <select
+                                                value={selectedModel}
+                                                onChange={(e) => {
+                                                    setSelectedModel(e.target.value);
+                                                    localStorage.setItem('iStudy_preferred_model', e.target.value);
+                                                }}
+                                                style={{
+                                                    appearance: 'none',
+                                                    border: 'none',
+                                                    background: 'transparent',
+                                                    color: 'inherit',
+                                                    fontSize: 'inherit',
+                                                    fontWeight: '400',
+                                                    cursor: 'pointer',
+                                                    outline: 'none',
+                                                    fontFamily: 'inherit',
+                                                    paddingRight: '0'
+                                                }}
+                                            >
+                                                <option value="gemini-3-flash-preview">Gemini 3 Flash</option>
+                                                <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                                            </select>
+                                        </div>
+                                    </div>
                                     <button className="action-btn" onClick={handleVoiceInput} disabled={isProcessing} title="Dictate Response">🎤</button>
                                     <button className="action-btn send-btn" onClick={handleSend} disabled={isProcessing}>➤</button>
                                 </div>
