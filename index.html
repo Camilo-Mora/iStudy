@@ -797,24 +797,30 @@ Compare the **Student Explanation** against the **Key Concepts**. Identify what 
 **DO NOT ASK ANY QUESTIONS.** Do not use phrases like "Does that make sense?" or "Can you clarify?". The student cannot respond to this message. Simply state your assessment.
 
 ### OUTPUT FORMAT
-You must follow this EXACT structure. Use Headers (###) for sections. Do not use standard bullet points (* or -), just use the emojis. CRITICAL: Separate each point with a full blank line.
+You must follow this EXACT structure. Use Headers (###) for sections. Do not use standard bullet points (* or -), just use the emojis.
+
+CRITICAL: You MUST put TWO full blank lines between every item. If you do not, they will be squashed together.
 
 ### Greeting
 A single, warm sentence acknowledging the student's help (e.g., "Thanks for explaining that!"). Do not ask how I am or if I understood.
 
-### What was clear: 
+### What was clear:
 
 ✅ [First concept you understood clearly]
 
+
 ✅ [Second concept if applicable]
 
-### What is confusing: 
+
+### What is confusing:
 
 ❓ [First concept that remains missing or vague in their explanation]
 
+
 ❓ [Second concept if applicable]
 
-**My assessment:** [Low, Medium, or High]. 
+
+**My assessment:** [Low, Medium, or High].
 
 * If **High**: "This is great, it is clear to me now."
 * If **Medium or Low**: "I am still not fully clear about this response; I will watch that part of the video again to be certain."
@@ -823,7 +829,7 @@ A single, warm sentence acknowledging the student's help (e.g., "Thanks for expl
 * **No Questions:** Under no circumstances should you ask a question. The student cannot reply.
 * **Be specific:** State exactly what concept you are referring to in each point.
 * **Be humble:** Always frame missing info as something you missed or didn't understand. 
-* **Formatting:** ENSURE A BLANK LINE between every point. Also ensure a blank line before "**My assessment:**".
+* **Formatting:** ENSURE TWO BLANK LINES between every emoji point. This is non-negotiable.
 `;
 
                         const tontinEval = await invokeLLM(tontinEvalPrompt, commonContext);
