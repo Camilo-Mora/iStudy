@@ -389,6 +389,18 @@
             const [isSystemLocked, setIsSystemLocked] = useState(false);
             const [lastUserInput, setLastUserInput] = useState('');
 
+            // SCROLL CONTROL: Force "overflow: hidden" on Landing Page
+            useEffect(() => {
+                if (view === 'landing') {
+                    document.body.style.overflow = 'hidden';
+                } else {
+                    document.body.style.overflow = 'auto'; // allow scrolling for chat
+                }
+                return () => {
+                   document.body.style.overflow = 'auto'; // cleanup
+                };
+            }, [view]);
+
             // Internal InvokeLLM with Lock Logic
             const invokeLLM = async (prompt, context = {}) => {
                 const systemContext = `
