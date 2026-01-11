@@ -123,6 +123,10 @@ header {
     backface-visibility: hidden;
     -webkit-backface-visibility: hidden;
     transform: translateZ(0);
+
+    /* Nuclear fix for grey 1px borders on Edge/Mobile */
+    clip-path: inset(1px);
+    -webkit-clip-path: inset(1px);
 }
 
 .main-upload-btn {
