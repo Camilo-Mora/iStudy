@@ -1237,9 +1237,11 @@ Output only your peer-style feedback                    `;
                                     exit={{ opacity: 0, scale: 0.95 }}
                                     className="landing-content"
                                 >
-                                    <video className="title-image" autoPlay loop muted playsInline>
-                                        <source src="istudy-landing-video.mp4" type="video/mp4" />
-                                    </video>
+                                    <div className="title-image-wrapper">
+                                        <video className="title-image" autoPlay loop muted playsInline>
+                                            <source src="istudy-landing-video.mp4" type="video/mp4" />
+                                        </video>
+                                    </div>
 
                                     <button className="main-upload-btn" onClick={handleUploadClick}>
                                         <span className="btn-icon">

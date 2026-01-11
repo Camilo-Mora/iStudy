@@ -104,29 +104,38 @@ header {
     overflow: hidden;
 }
 
-.title-image {
+.title-image-wrapper {
+    position: relative;
+    z-index: 1;
     width: 90%;
     max-width: 800px;
     max-height: 60vh;
-    object-fit: contain;
     margin-bottom: clamp(-40px, -5vh, -60px);
-    transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
-    position: relative;
-    z-index: 1;
+    overflow: hidden;
+    /* HARD CROP */
+    border-radius: 2px;
+    /* Slight radius helps masking */
+}
 
-    /* Fix for tablet grey lines/artifacts */
+.title-image {
+    width: 100.5%;
+    /* Push pixels OUTSIDE the container */
+    height: 100.5%;
+    max-width: none;
+    /* Let wrapper control constraint */
+    max-height: 100%;
+    object-fit: contain;
+
+    /* Center it perfectly after scaling */
+    position: relative;
+    left: -0.25%;
+    top: -0.25%;
+
     background: transparent;
     border: none;
     outline: none;
     box-shadow: none;
     display: block;
-    backface-visibility: hidden;
-    -webkit-backface-visibility: hidden;
-    transform: translateZ(0);
-
-    /* Nuclear fix for grey 1px borders on Edge/Mobile */
-    clip-path: inset(1px);
-    -webkit-clip-path: inset(1px);
 }
 
 .main-upload-btn {
@@ -743,7 +752,7 @@ header {
         /* Height removed to respect fixed positioning */
     }
 
-    .title-image {
+    .title-image-wrapper {
         max-height: 50vh;
         /* Reduce video size on tablets */
         width: 85%;
@@ -783,7 +792,7 @@ header {
         /* Adjust for mobile header */
     }
 
-    .title-image {
+    .title-image-wrapper {
         max-height: 40vh;
         /* Further reduce video on mobile */
         width: 90%;
@@ -835,7 +844,7 @@ header {
 
 /* Small Mobile - 375px and below */
 @media (max-width: 375px) {
-    .title-image {
+    .title-image-wrapper {
         max-height: 35vh;
     }
 
