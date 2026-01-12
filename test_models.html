@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>iStudy Model Benchmark</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+    <script src="https://unpkg.com/react-markdown@8.0.7/react-markdown.min.js"></script>
+
+    <style>
+        body {
+            padding: 20px;
+            background: #f0f2f5;
+            font-family: 'Inter', sans-serif;
+            overflow: auto !important;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .card {
+            background: white;
+            padding: 24px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            margin-bottom: 24px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            transition: 0.2s;
+            background: #2563eb;
+            color: white;
+        }
+
+        .btn:disabled {
+            background: #94a3b8;
+            cursor: not-allowed;
+        }
+
+        .btn:hover:not(:disabled) {
+            background: #1d4ed8;
+        }
+
+        .col-3 {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+        }
+
+        .model-box {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .model-header {
+            font-weight: 800;
+            color: #1e293b;
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 8px;
+            margin-bottom: 12px;
+            font-size: 0.9em;
+            text-transform: uppercase;
+        }
+
+        .response-area {
+            font-family: 'Outfit', sans-serif;
+            font-size: 0.95em;
+            line-height: 1.5;
+            color: #334155;
+            white-space: pre-wrap;
+            flex-grow: 1;
+        }
+
+        .input-area {
+            margin-top: 20px;
+            border-top: 2px solid #e2e8f0;
+            padding-top: 20px;
+        }
+
+        textarea {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            font-family: inherit;
+            margin-bottom: 12px;
+        }
+
+        .status-log {
+            font-family: monospace;
+            font-size: 0.8em;
+            color: #64748b;
+            margin-top: 10px;
+            max-height: 100px;
+            overflow-y: auto;
+            background: #fff;
+            padding: 8px;
+            border-radius: 4px;
+        }
+
+        /* Markdown Styles for Reports */
+        .md-report h3,
+        .md-report h4 {
+            margin-top: 0.5em;
+            margin-bottom: 0.2em;
+            font-size: 1em;
+            font-weight: 700;
+            color: #0f172a;
+        }
+
+        .md-report p {
+            margin-bottom: 0.5em;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+        const ReactMarkdown = window.ReactMarkdown?.default || window.ReactMarkdown || ((props) => <div>{props.children}</div>);
+
+        // --- MODELS & CONFIG ---
+        const MODELS = [
+            { id: 'gemini-3-flash-preview', label: 'Gemini 3 Flash' },
+            { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
+            { id: 'gemma-3-27b-it', label: 'Gemma 3 27b' }
+        ];
+
+        // --- CORE LOGIC ---
+        const Core = {
+            FetchChapterData: async (chapterNum) => {
+                const paddedChapter = chapterNum.toString().padStart(2, '0');
+                const questionsUrl = `https://raw.githack.com/Camilo-Mora/GEO309/main/main/ExamQuestions_${paddedChapter}.xlsx`;
+                const transcriptUrl = `https://raw.githack.com/Camilo-Mora/GEO309/main/main/Transcript_Lecture_${paddedChapter}.txt`;
+
+                const qRes = await fetch(questionsUrl);
+                if (!qRes.ok) throw new Error(`Questions not found.`);
+                const qBuffer = await qRes.arrayBuffer();
+                const workbook = XLSX.read(new Uint8Array(qBuffer), { type: 'array' });
+                const rawRows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1 });
+
+                const tRes = await fetch(transcriptUrl);
+                const transcript = tRes.ok ? await tRes.text() : "No transcript.";
+
+                return {
+                    questions: rawRows.filter(row => row && row.length >= 2 && row[1]).map(row => ({
+                        question_number: row[0],
+                        question_text: row[1].toString().trim(),
+                        timestamp: row[2] || null
+                    })),
+                    transcript
+                };
+            },
+
+            GeneratePrompt: (transcript, questions, studentResponses) => {
+                // EXACT Prompt from index.html -> BatchAnalyzeResponses
+                return `
+                    Analyze these student responses for a Biogeography course based on the lecture transcript.
+                    
+                    Transcript: "${transcript.substring(0, 300000)}" 
+                    
+                    Questions & Student Responses:
+                    ${questions.map((q, i) => `
+                    Q${q.question_number}: ${q.question_text}
+                    Student said: "${studentResponses[i] || 'No response provided.'}"
+                    `).join('\n')}
+
+                    Task:
+                    Review each response. Provide:
+                    1. A grade (1-5).
+                    2. A concise critique.
+                    3. A model answer based on the transcript.
+                    4. The exact timestamp (e.g. 12:45) from the lecture transcript where the answer is found.
+
+                    Output MUST be a STRICT JSON array of objects:
+                    [{"grade": 4, "critique": "...", "model_answer": "...", "timestamp": "12:45"}, ...]
+                `;
+            },
+
+            CallModel: async (modelId, apiKey, prompt) => {
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${apiKey}`;
+                try {
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+                    });
+                    const data = await response.json();
+                    if (data.error) throw new Error(data.error.message);
+                    return data.candidates && data.candidates[0] ? data.candidates[0].content.parts[0].text : "No content returned";
+                } catch (e) {
+                    throw e;
+                }
+            }
+        };
+
+        function App() {
+            const [apiKey, setApiKey] = useState(localStorage.getItem('google_api_key') || '');
+            const [step, setStep] = useState('setup'); // setup, fetching, analyzing_initial, reviewing
+            const [data, setData] = useState(null);
+            const [log, setLog] = useState([]);
+
+            // Storage for the "Initial" AI runs (Phase 1)
+            // Structure: { [modelId]: [ { grade, critique, model_answer, timestamp }... for each question] }
+            const [initialResults, setInitialResults] = useState({});
+
+            // Current Interaction
+            const [currentQIdx, setCurrentQIdx] = useState(0);
+            const [userInput, setUserInput] = useState('');
+            const [gradingResults, setGradingResults] = useState({}); // { [modelId]: NewtonReportString }
+            const [isGrading, setIsGrading] = useState(false);
+
+            const addToLog = (msg) => setLog(prev => [`[${new Date().toLocaleTimeString()}] ${msg}`, ...prev]);
+
+            const runInitialAnalysis = async () => {
+                if (!apiKey) return alert("API Key Required");
+                setStep('fetching');
+                addToLog("Fetching Chapter 1...");
+
+                try {
+                    const fetched = await Core.FetchChapterData(1);
+                    setData(fetched);
+                    setStep('analyzing_initial');
+
+                    const resultsMap = {};
+                    addToLog("Starting parallel model requests...");
+
+                    const promises = MODELS.map(async (model) => {
+                        addToLog(`⏳ Requesting ${model.label}...`);
+
+                        // Use a clear dummy response so the AI knows to provide the correct answer as correction
+                        const dummyResponses = fetched.questions.map(() => "I do not know the answer.");
+                        const prompt = Core.GeneratePrompt(fetched.transcript, fetched.questions, dummyResponses);
+
+                        try {
+                            const raw = await Core.CallModel(model.id, apiKey.replace(/"/g, ''), prompt);
+                            const jsonMatch = raw.match(/\[[\s\S]*\]/);
+                            if (jsonMatch) {
+                                const parsed = JSON.parse(jsonMatch[0]);
+                                resultsMap[model.id] = parsed;
+                                addToLog(`✅ ${model.label} success.`);
+                            } else {
+                                throw new Error("Invalid JSON format. Start: " + raw.substring(0, 50));
+                            }
+                        } catch (err) {
+                            addToLog(`❌ ${model.label} failed: ${err.message}`);
+                            resultsMap[model.id] = fetched.questions.map(() => ({
+                                model_answer: `Analysis Failed: ${err.message}`,
+                                grade: 0,
+                                critique: "Error"
+                            }));
+                        }
+                    });
+
+                    await Promise.all(promises);
+
+                    setInitialResults(resultsMap);
+                    setStep('reviewing');
+
+                } catch (err) {
+                    alert("Error: " + err.message);
+                    setStep('setup');
+                }
+            };
+
+            const runGrading = async () => {
+                if (!userInput.trim()) return alert("Please enter a response.");
+                setIsGrading(true);
+                setGradingResults({}); // clear old
+                addToLog("Grading user response...");
+
+                const currentQ = data.questions[currentQIdx];
+                const singleQList = [currentQ];
+                const singleRespList = [userInput];
+
+                // Prompt - We reuse the Batch Prompt structure but for 1 question to get structured data
+                // Then we format it as Newton Report
+                const prompt = Core.GeneratePrompt(data.transcript, singleQList, singleRespList);
+
+                // Parallel Grading
+                const promises = MODELS.map(async (model) => {
+                    try {
+                        const raw = await Core.CallModel(model.id, apiKey.replace(/"/g, ''), prompt);
+                        const jsonMatch = raw.match(/\[[\s\S]*\]/);
+                        const parsed = jsonMatch ? JSON.parse(jsonMatch[0])[0] : null;
+
+                        if (!parsed) throw new Error("Failed to parse grading JSON");
+
+                        // Format as Newton Report (Matches index.html logic)
+                        const report = `
+### Question ${currentQ.question_number}
+#### Question:
+${currentQ.question_text}
+
+#### Your Response:
+${userInput}
+
+#### Score:
+${parsed.grade}/5
+
+#### Feedback:
+${parsed.critique}
+
+#### Model Answer(AI):
+${parsed.model_answer}
+
+${parsed.timestamp ? `***I found this response around minute ${parsed.timestamp} of the video.***` : ''}
+                        `;
+                        return { id: model.id, report };
+
+                    } catch (err) {
+                        return { id: model.id, report: `**Error:** ${err.message}` };
+                    }
+                });
+
+                const outcomes = await Promise.all(promises);
+                const results = {};
+                outcomes.forEach(o => results[o.id] = o.report);
+
+                setGradingResults(results);
+                setIsGrading(false);
+            };
+
+            const nextQ = () => {
+                if (currentQIdx < data.questions.length - 1) {
+                    setCurrentQIdx(p => p + 1);
+                    setUserInput('');
+                    setGradingResults({});
+                }
+            };
+
+            const prevQ = () => {
+                if (currentQIdx > 0) {
+                    setCurrentQIdx(p => p - 1);
+                    setUserInput('');
+                    setGradingResults({});
+                }
+            };
+
+            // --- VIEW ---
+            if (step === 'setup') {
+                return (
+                    <div className="container" style={{ maxWidth: '600px', marginTop: '50px' }}>
+                        <div className="card">
+                            <h1 className="text-2xl font-bold mb-4">Model Benchmark Setup</h1>
+                            <p className="mb-4 text-gray-600">Enter your Google API Key. We will fetch Chapter 1 and run an initial "Model Answer Generation" pass using all 3 models.</p>
+                            <input
+                                type="password"
+                                value={apiKey}
+                                onChange={e => setApiKey(e.target.value)}
+                                className="w-full p-2 border rounded mb-4"
+                                placeholder="Google API Key"
+                            />
+                            <button className="btn w-full" onClick={runInitialAnalysis}>Start Benchmark</button>
+                        </div>
+                    </div>
+                );
+            }
+
+            if (step === 'fetching' || step === 'analyzing_initial') {
+                return (
+                    <div className="container" style={{ textAlign: 'center', marginTop: '100px' }}>
+                        <h2 className="text-xl font-bold mb-4">Processing...</h2>
+                        <div className="animate-spin text-4xl mb-4">⚙️</div>
+                        <p>Phase 1: Generating Model Answers from Transcript...</p>
+                        <div className="status-log" style={{ textAlign: 'left', maxWidth: '600px', margin: '20px auto' }}>
+                            {log.map((l, i) => <div key={i}>{l}</div>)}
+                        </div>
+                    </div>
+                );
+            }
+
+            // REVIEW UI
+            const q = data.questions[currentQIdx];
+
+            return (
+                <div className="container">
+                    <header className="flex justify-between items-center mb-6">
+                        <h1 className="text-xl font-bold">Chapter 1 Benchmark</h1>
+                        <div className="flex gap-2">
+                            <button className="btn" onClick={prevQ} disabled={currentQIdx === 0}>Previous</button>
+                            <span className="py-2 px-4 bg-white rounded border font-bold">Q{q.question_number} / {data.questions.length}</span>
+                            <button className="btn" onClick={nextQ} disabled={currentQIdx === data.questions.length - 1}>Next</button>
+                        </div>
+                    </header>
+
+                    <div className="card">
+                        <h2 className="text-lg font-bold mb-2">Q{q.question_number}: {q.question_text}</h2>
+                    </div>
+
+                    {/* PHASE 1 RESULTS (The 3 Model Answers) */}
+                    <div className="col-3 mb-6">
+                        {MODELS.map(m => {
+                            const res = initialResults[m.id] ? initialResults[m.id][currentQIdx] : null;
+                            const content = res ? res.model_answer : "Loading...";
+                            const timestamp = res && res.timestamp ? res.timestamp : null;
+                            return (
+                                <div key={m.id} className="model-box">
+                                    <div className="model-header">{m.label} (Initial Answer)</div>
+                                    <div className="response-area text-sm">{content}</div>
+                                    {timestamp && (
+                                        <div className="mt-2 pt-2 border-t border-gray-200 text-xs font-bold text-gray-500">
+                                            ⏱ Video Time: {timestamp}
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    {/* PHASE 2: User Input */}
+                    <div className="card input-area">
+                        <h3 className="font-bold mb-2">Write your response to test grading:</h3>
+                        <textarea
+                            rows="4"
+                            value={userInput}
+                            onChange={e => setUserInput(e.target.value)}
+                            placeholder="Type your answer here..."
+                        ></textarea>
+                        <button className="btn" onClick={runGrading} disabled={isGrading}>
+                            {isGrading ? 'Grading...' : 'Submit to Newton (All 3 Models)'}
+                        </button>
+                    </div>
+
+                    {/* PHASE 3: Grading Results */}
+                    {Object.keys(gradingResults).length > 0 && (
+                        <div className="mt-8">
+                            <h3 className="text-xl font-bold mb-4 border-b pb-2">Newton Grading Reports</h3>
+                            <div className="col-3">
+                                {MODELS.map(m => (
+                                    <div key={m.id} className="model-box bg-white shadow-sm border-blue-200">
+                                        <div className="model-header text-blue-800">{m.label} Report</div>
+                                        <div className="response-area md-report">
+                                            <ReactMarkdown>{gradingResults[m.id]}</ReactMarkdown>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+
+</html>
