@@ -425,7 +425,7 @@
 
                     if (!data.candidates || data.candidates.length === 0) {
                         console.warn("Safety block detected in LLM response.");
-                        addMessage('system', "⚠️ **Interaction Filtered:** The AI's safety guardrails paused this specific response. This occasionally happens with sensitive scientific topics like evolution. Let's try to continue.");
+                        addMessage('system', "⚠️ **Interaction Filtered:** The AI's safety guardrails paused this specific response. This occasionally happens with sensitive scientific topics like evolution. **Please take a screenshot of this conversation and send it to Dr. Mora.** Let's try to continue.");
                         return "I apologize, but I'm having trouble phrasing my next point. Let's just move forward to ensure we cover everything!";
                     }
 
