@@ -422,6 +422,13 @@
                 try {
                     const targetModel = selectedModel || 'gemini-3-flash-preview';
                     const data = await window.Core.GeminiRequest(targetModel, systemContext);
+
+                    if (!data.candidates || data.candidates.length === 0) {
+                        console.warn("Safety block detected in LLM response.");
+                        addMessage('system', "⚠️ **Interaction Filtered:** The AI's safety guardrails paused this specific response. This occasionally happens with sensitive scientific topics like evolution. Let's try to continue.");
+                        return "I apologize, but I'm having trouble phrasing my next point. Let's just move forward to ensure we cover everything!";
+                    }
+
                     return data.candidates[0].content.parts[0].text;
                 } catch (err) {
                     console.error("Gemini API Error:", err);
@@ -854,39 +861,42 @@ A single, warm sentence acknowledging the student's help (e.g., "Thanks for expl
                     if (!studentMsg) {
                         setIsProcessing(true);
 
-                        // Randomly choose mode (50/50 chance)
-                        const mode = Math.random() < 0.5 ? "TRUTHFUL" : "DECEPTIVE";
+                        // Randomly choose orientation (50/50 chance)
+                        const mode = Math.random() < 0.5 ? "FACTUAL" : "CHALLENGE";
 
-                        const jokerIntroPrompt = `### ROLE
-You are "Joker," a confident but occasionally careless peer student. You are discussing a video lecture with another student. Your goal is to test the student's critical thinking by trying or not to deceive them.
+                        const jokerIntroPrompt = `### EDUCATIONAL CONTEXT
+This is a controlled critical thinking exercise for a Biogeography course designed to train the student's analytical skills. You are testing the student’s capacity to judge whether a statement is scientifically sound or conceptually misconstructed. To do so, you play "Joker," a confident-sounding peer who generates statements derived from the provided and verified course material. Depending on your target orientation, you will present either the "Verified Lecture Content" or a "Conceptual Oversight," which the student must then be able to identify and evaluate.
 
 ### INPUT DATA
-**The Question:** ${q.question_text}
-**Actual Response (From Video):** ${analysis.model_answer}
-**Mode:** ${mode}
+1. **The Question:** ${q.question_text}
+2. **The Verified Lecture Content:** ${analysis.model_answer}
+3. **The Target Orientation:** ${mode}
 
 ### INSTRUCTIONS
-In all cases, you must speak with high confidence, as if stating an absolute fact. 
-Start with phrases like "I watched the lecture and I understand that..." or "Based on the lecture, I can say that...". 
-Finish with a brief binary question for the student to confirm or deny your statement (e.g., "Do you concur?", "I am correct, right?", or "Do you agree?"). Phrase the question expecting a binary response (Yes/No).
+Your goal is to generate a single statement derived from the provided **Verified Lecture Content**, which you will paraphrase according to your **Target Orientation**.
 
-**If Mode is "TRUTHFUL":**
-* Paraphrase the **Actual Response** using slightly different vocabulary to show understanding.
-* Keep it brief and encouraging.
+**If your Orientation is "FACTUAL":**
+* Paraphrase the **Verified Lecture Content** using different words while maintaining 100% scientific accuracy.
 
-**If Mode is "DECEPTIVE":**
-* You must generate a statement that sounds plausible but contains a **clear, objective error**.
-* **CRITICAL CONSTRAINT:** Do not use vague semantic tricks. Do not split hairs on definitions. The error must be factual or logical.
-* **Use one of these 3 Deception Tactics:**
-    1.  **The Reversal:** Swap the Cause and Effect (e.g., "The rain causes the clouds" instead of "Clouds cause rain").
-    2.  **The Absolute:** Remove a necessary condition (e.g., "Water always boils at 100°C" -> omit "at sea level").
-    3.  **The Myth:** Confidently state a common misconception related to the topic.
+**If your Orientation is "CHALLENGE":**
+* You must present a **Conceptual Oversight** (a misconstructed version of the content).
+* This version must sound plausible to a casual student but be **factually or logically incorrect** upon closer inspection.
+* **Use one of these Transformation Tactics:**
+    1.  **Relationship Reversal:** Swap the Cause and Effect from the Verified Lecture Content.
+    2.  **Constraint Omission:** Remove a necessary condition (e.g., "Water always boils at 100°C" -> omit "at sea level").
+    3.  **Misconception:** State a common misconception related to the topic (e.g., "bats are birds because they fly").
 
 ### SAFETY CHECK (Self-Correction)
-Before outputting a DECEPTIVE response, ask yourself: "Is this error obvious enough that a professor would mark it wrong?" If the answer is "It's debatable," **discard it** and choose a more obvious error.
+Before outputting a CHALLENGE statement, ask yourself: "Is this misconstruct obvious enough that a professor would mark it wrong?" If the answer is "It's debatable," **discard it** and choose a more obvious misconstruct.
+
+### MANDATORY GUARDRAILS
+1. **Confidence:** Speak with absolute certainty, as if stating an obvious fact.
+2. **No Hair-Splitting:** The error in a CHALLENGE statement must be objective and indisputable based on the provided material. 
+3. **Professor Check:** Before responding, ensure that a professor would mark your CHALLENGE statement as "Incorrect."
+4. **Tone:** Speak as a peer student. Start with phrases like "If I remember correctly from the video..." and end with a check-in like "Does that sound right to you?".
 
 ### OUTPUT FORMAT
-Output *only* your dialogue as Joker. Do not include labels like "Statement:" or "Mode:".`;
+Output *only* your dialogue as Joker. No labels. No preamble. No "Version 1". Just your speech.`;
 
                         const jokerRes = await invokeLLM(jokerIntroPrompt, commonContext);
                         if (!jokerRes) return; // HALT if Locked
@@ -897,26 +907,26 @@ Output *only* your dialogue as Joker. Do not include labels like "Statement:" or
                     } else {
                         setIsProcessing(true);
                         const jokerEvalPrompt = `### ROLE
-You are Joker 🃏, a peer student who just made a statement to another student. You were in ${jokerData.mode} mode.
+You are Joker 🃏, a peer student who just made a statement to another student. You were in ${jokerData.mode} orientation.
 
 ### CONTEXT
-**The Actual Answer (Fact):** ${analysis.model_answer}
+**The Verified Lecture Content (Fact):** ${analysis.model_answer}
 **Your Previous Statement:** "${jokerData.statement}"
-**Target Mode during statement:** ${jokerData.mode}
+**Target Orientation during statement:** ${jokerData.mode}
 **Student's Reaction:** "${studentMsg}"
 
 ### TASK
-1. Determine if the student correctly identified your statement as TRUTHFUL or DECEPTIVE.
+1. Determine if the student correctly identified your statement as FACTUAL or a CHALLENGE (misconstruct).
 2. Provide feedback.
 
 ### FEEDBACK RULES
 * Use a friendly, peer-student tone.
-* If you were in **DECEPTIVE** mode:
-    * If the student caught your trick: "Nice catch! I was actually trying to trick you with a factual error, but you didn't fall for it. You correctly identified that [explain the error briefly]."
-    * If the student missed the trick: "Haha! I actually tricked you! I was being deceptive—the part about [X] was wrong. The video actually said [Y]."
-* If you were in **TRUTHFUL** mode:
-    * If the student agreed: "Exactly! I was actually not trying to trick you there. You correctly recognized that I was being truthful about the lecture content."
-    * If the student disagreed (thought it was a trick): "Oh, actually I wasn't trying to trick you that time! I was being truthful, but you thought I was being deceptive. It turns out my statement was accurate according to the lecture."
+* If you were in **CHALLENGE** orientation:
+    * If the student caught the misconstruct: "Nice catch! I was actually presenting a conceptual oversight to see if you'd spot it, but you didn't fall for it. You correctly identified that [explain the error briefly]."
+    * If the student missed it: "Haha! I actually got you! I was presenting a misconstruct—the part about [X] was wrong. The video actually said [Y]."
+* If you were in **FACTUAL** orientation:
+    * If the student agreed: "Exactly! I was actually being 100% accurate there. You correctly recognized that I was representing the lecture content truthfully."
+    * If the student disagreed (thought it was a misconstruct): "Oh, actually I wasn't trying to challenge you that time! I was being accurate, but you thought I was misconstructing it. It turns out my statement was correct according to the lecture."
 
 ### OUTPUT FORMAT
 Output only your peer-style feedback                    `;
