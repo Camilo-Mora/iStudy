@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>iStudy 1.3 - Student Essay Review System</title>
+    <title>iStudy 1.4 - Student Essay Review System</title>
     <link rel="stylesheet" href="styles.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -116,7 +116,8 @@
                 try {
                     // Read preference
                     const preferredModel = localStorage.getItem('iStudy_preferred_model') || 'gemini-3-flash';
-                    const data = await window.Core.GeminiRequest(preferredModel, prompt);
+                    const result = await window.Core.GeminiRequest(preferredModel, prompt);
+                    const data = result.data;
 
                     const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
                     if (!text) throw new Error("EMPTY_RESPONSE");
@@ -216,7 +217,7 @@
                                 continue; // Try next key/model silently
                             }
 
-                            return data; // Success!
+                            return { data, modelUsed: currentModel }; // Success!
 
                         } catch (err) {
                             const msg = err.message || "Network/Fetch Error";
@@ -260,7 +261,8 @@
                 try {
                     // Use user preference for batch analysis too
                     const preferredModel = localStorage.getItem('iStudy_preferred_model') || 'gemini-3-flash';
-                    const data = await window.Core.GeminiRequest(preferredModel, prompt);
+                    const result = await window.Core.GeminiRequest(preferredModel, prompt);
+                    const data = result.data;
                     const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
                     if (!text) throw new Error("EMPTY_RESPONSE");
                     console.log("Batch Analysis Raw Response:", text);
@@ -436,8 +438,14 @@
 
                 try {
                     const targetModel = selectedModel || 'gemini-3-flash-preview';
-                    const data = await window.Core.GeminiRequest(targetModel, systemContext);
+                    const result = await window.Core.GeminiRequest(targetModel, systemContext);
 
+                    // Sync UI with the actual model that responded
+                    if (result?.modelUsed) {
+                        setSelectedModel(result.modelUsed);
+                    }
+
+                    const data = result?.data;
                     const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
                     if (!text) {
                         console.warn("Safety block or empty response detected after all retries.");
@@ -1327,7 +1335,7 @@ You are "Joker," a peer student. In the previous turn, you presented the student
             return (
                 <div className="app-root">
                     <header>
-                        <div className="logo">IStudy <span style={{ fontSize: '0.5em', opacity: 0.6, verticalAlign: 'middle', fontWeight: 'normal' }}>1.3</span></div>
+                        <div className="logo">IStudy <span style={{ fontSize: '0.5em', opacity: 0.6, verticalAlign: 'middle', fontWeight: 'normal' }}>1.4</span></div>
                         <div className="settings-icon" onClick={() => setShowSettings(true)}>
                             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                 <circle cx="12" cy="12" r="3"></circle>
