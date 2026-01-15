@@ -438,15 +438,17 @@
                     const targetModel = selectedModel || 'gemini-3-flash-preview';
                     const data = await window.Core.GeminiRequest(targetModel, systemContext);
 
-                    if (!data.candidates || data.candidates.length === 0) {
-                        console.warn("Safety block detected in LLM response.");
-                        addMessage('system', "⚠️ **Interaction Filtered:** The AI's safety guardrails paused this specific response. This occasionally happens with sensitive scientific topics like evolution. **Please take a screenshot of this conversation and send it to Dr. Mora.** Let's try to continue.");
+                    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+                    if (!text) {
+                        console.warn("Safety block or empty response detected after all retries.");
+                        addMessage('system', "⚠️ **Interaction Filtered:** The AI's safety guardrails paused this specific response. We attempted to use different models, but the content remained restricted. **Please take a screenshot of this conversation and send it to Dr. Mora.** Let's try to continue.");
                         return "I apologize, but I'm having trouble phrasing my next point. Let's just move forward to ensure we cover everything!";
                     }
 
-                    return data.candidates[0].content.parts[0].text;
+                    return text;
                 } catch (err) {
                     console.error("Gemini API Error:", err);
+                    const msg = err.message || "";
                     if (msg.toLowerCase().includes("quota") || msg.toLowerCase().includes("limit") || msg.toLowerCase().includes("429")) {
                         setIsSystemLocked(true);
                         addMessage('system', "⚠️ **Quota Limit Reached!** You have reached your Google API limit. \n\n**System Locked:** You cannot proceed without a valid API key. \n\n**To Unlock:** Generate a new API key using a **different personal Gmail account** and add it via the ⚙️ icon. Our app will loop over available keys. \n\nYou can also restart tomorrow as quotas are reset by Google at midnight Pacific time. \n\n*Note: UH emails DO NOT support API keys.*");
