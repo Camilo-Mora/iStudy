@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>iStudy 1.0 - Student Essay Review System</title>
+    <title>iStudy 1.1 - Student Essay Review System</title>
     <link rel="stylesheet" href="styles.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -118,20 +118,18 @@
                     const preferredModel = localStorage.getItem('iStudy_preferred_model') || 'gemini-3-flash';
                     const data = await window.Core.GeminiRequest(preferredModel, prompt);
 
-                    let text = data.candidates[0].content.parts[0].text;
+                    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+                    if (!text) throw new Error("EMPTY_RESPONSE");
                     console.log("LLM Raw Response:", text);
 
                     const jsonMatch = text.match(/\[[\s\S]*\]/);
                     if (jsonMatch) {
-                        text = jsonMatch[0];
+                        const parsed = JSON.parse(jsonMatch[0]);
+                        if (!Array.isArray(parsed)) throw new Error("Parsed result is not an array");
+                        return { responses: parsed, error: null };
                     } else {
                         throw new Error("No JSON array found in response");
                     }
-
-                    const parsed = JSON.parse(text);
-                    if (!Array.isArray(parsed)) throw new Error("Parsed result is not an array");
-
-                    return { responses: parsed, error: null };
                 } catch (err) {
                     console.error("Smart Parse Error:", err);
                     const msg = err.message || "";
@@ -197,12 +195,25 @@
 
                             const data = await response.json();
 
+                            // 1. API Level Error
                             if (data.error) {
                                 const msg = data.error.message || JSON.stringify(data.error);
                                 const errStr = `[${currentModel}]: ${msg}`;
                                 console.warn(errStr);
                                 errorLog.push(errStr);
-                                continue; // Try next key/model
+                                continue;
+                            }
+
+                            // 2. Safety / Empty Content Check
+                            const hasContent = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+                            const isSafetyBlocked = data?.candidates?.[0]?.finishReason === 'SAFETY' || data?.promptFeedback?.blockReason === 'SAFETY';
+
+                            if (!hasContent || isSafetyBlocked) {
+                                const reason = isSafetyBlocked ? "SAFETY_BLOCK" : "EMPTY_CONTENT";
+                                const errStr = `[${currentModel}]: ${reason}`;
+                                console.warn(errStr);
+                                errorLog.push(errStr);
+                                continue; // Try next key/model silently
                             }
 
                             return data; // Success!
@@ -250,10 +261,11 @@
                     // Use user preference for batch analysis too
                     const preferredModel = localStorage.getItem('iStudy_preferred_model') || 'gemini-3-flash';
                     const data = await window.Core.GeminiRequest(preferredModel, prompt);
-                    let raw = data.candidates[0].content.parts[0].text;
-                    console.log("Batch Analysis Raw Response:", raw);
-                    const jsonMatch = raw.match(/\[[\s\S]*\]/);
-                    if (jsonMatch) raw = jsonMatch[0];
+                    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+                    if (!text) throw new Error("EMPTY_RESPONSE");
+                    console.log("Batch Analysis Raw Response:", text);
+                    const jsonMatch = text.match(/\[[\s\S]*\]/);
+                    let raw = jsonMatch ? jsonMatch[0] : text;
                     const parsed = JSON.parse(raw);
                     if (!Array.isArray(parsed)) throw new Error("Batch analysis did not return an array.");
 
@@ -340,7 +352,7 @@
 
             try {
                 const data = await window.Core.GeminiRequest('gemini-2.5-flash', systemContext);
-                return data.candidates[0].content.parts[0].text;
+                return data?.candidates?.[0]?.content?.parts?.[0]?.text || "I apologize, but I am having trouble forming a response right now. Let's continue.";
             } catch (err) {
                 console.error("Gemini API Error:", err);
                 const msg = err.message || "";
@@ -391,6 +403,7 @@
             const [isSystemLocked, setIsSystemLocked] = useState(false);
             const [lastUserInput, setLastUserInput] = useState('');
             const [isCheckingKey, setIsCheckingKey] = useState(false);
+            const [isPendingUpload, setIsPendingUpload] = useState(false);
 
             // SCROLL CONTROL: Force "overflow: hidden" on Landing Page
             useEffect(() => {
@@ -433,13 +446,18 @@
                     return data.candidates[0].content.parts[0].text;
                 } catch (err) {
                     console.error("Gemini API Error:", err);
-                    const msg = err.message || "";
                     if (msg.toLowerCase().includes("quota") || msg.toLowerCase().includes("limit") || msg.toLowerCase().includes("429")) {
                         setIsSystemLocked(true);
                         addMessage('system', "⚠️ **Quota Limit Reached!** You have reached your Google API limit. \n\n**System Locked:** You cannot proceed without a valid API key. \n\n**To Unlock:** Generate a new API key using a **different personal Gmail account** and add it via the ⚙️ icon. Our app will loop over available keys. \n\nYou can also restart tomorrow as quotas are reset by Google at midnight Pacific time. \n\n*Note: UH emails DO NOT support API keys.*");
                         retryRequestRef.current = { type: 'CHAT' };
                         return null; // Signal to Halt
                     }
+
+                    if (msg.includes("SAFETY_BLOCK") || msg.includes("EMPTY_CONTENT")) {
+                        addMessage('system', "⚠️ **Interaction Filtered:** The AI's safety guardrails paused this specific response. We attempted to use different models, but the content remained restricted. **Please take a screenshot of this conversation and send it to Dr. Mora.** Let's try to move on.");
+                        return "I'm having a little trouble with my phrasing on this one—let's keep going so we stay on track!";
+                    }
+
                     addMessage('system', `System Error: ${msg}`);
                     return null;
                 }
@@ -482,26 +500,7 @@
                 }]);
             };
 
-            const handleUploadClick = async () => {
-                if (isCheckingKey) return;
-
-                const raw = localStorage.getItem('google_api_key');
-                let currentKeys = [];
-                if (raw) {
-                    try {
-                        const parsed = JSON.parse(raw);
-                        currentKeys = Array.isArray(parsed) ? parsed : [{ key: raw, label: 'Default' }];
-                    } catch (e) {
-                        currentKeys = [{ key: raw, label: 'Default' }];
-                    }
-                }
-                currentKeys = currentKeys.filter(k => k && k.key && k.key.trim().length > 10);
-
-                if (currentKeys.length === 0) {
-                    setShowSettings(true);
-                    return;
-                }
-
+            const validateAndProceed = async () => {
                 setIsCheckingKey(true);
                 try {
                     // Quick validation request
@@ -520,8 +519,32 @@
                 } catch (err) {
                     setIsCheckingKey(false);
                     setView('chat');
-                    addMessage('system', "Your API key was rejected. Did you follow the instructions on the website? If you did, you may need to get a new API key with another account.");
+                    addMessage('system', "Your API key was rejected. Did you follow the instructions on the website? If you did, you may need to get a new API key with another account. You can update your API keys by clicking the ⚙️ icon in the top right corner.");
                 }
+            };
+
+            const handleUploadClick = async () => {
+                if (isCheckingKey) return;
+
+                const raw = localStorage.getItem('google_api_key');
+                let currentKeys = [];
+                if (raw) {
+                    try {
+                        const parsed = JSON.parse(raw);
+                        currentKeys = Array.isArray(parsed) ? parsed : [{ key: raw, label: 'Default' }];
+                    } catch (e) {
+                        currentKeys = [{ key: raw, label: 'Default' }];
+                    }
+                }
+                currentKeys = currentKeys.filter(k => k && k.key && k.key.trim().length > 10);
+
+                if (currentKeys.length === 0) {
+                    setIsPendingUpload(true);
+                    setShowSettings(true);
+                    return;
+                }
+
+                await validateAndProceed();
             };
 
             const handleFileChange = async (e) => {
@@ -1189,7 +1212,7 @@ Output only your peer-style feedback                    `;
                 else setApiKey('');
             };
 
-            const handleAddKeys = () => {
+            const handleAddKeys = async () => {
                 const inputs = [tempKey, ...extraKeys].filter(k => k && k.trim().length > 10);
                 if (inputs.length === 0) {
                     setShowSettings(false);
@@ -1206,8 +1229,39 @@ Output only your peer-style feedback                    `;
 
                 setTempKey('');
                 setExtraKeys([]);
+
+                // CLOSE MODAL IMMEDIATELY
                 setShowSettings(false);
-                addMessage('system', `✅ ${newEntries.length} key(s) added to vault.`);
+
+                if (isPendingUpload) {
+                    setIsPendingUpload(false);
+                    await validateAndProceed();
+                } else {
+                    setIsCheckingKey(true);
+                    try {
+                        const testModel = selectedModel || 'gemini-3-flash-preview';
+                        await window.Core.GeminiRequest(testModel, "ping");
+                        setIsCheckingKey(false);
+
+                        let instructions = "You are all set.";
+                        if (view === 'landing') {
+                            instructions = "Please click the **'Upload Response Sheet'** button to begin.";
+                        } else if (view === 'chat') {
+                            if (!submission.student_email) {
+                                instructions = "Please **enter your student email** below to verify your enrollment.";
+                                setIsVerifyingEmail(true);
+                            } else if (isSystemLocked) {
+                                instructions = "Our app will now automatically attempt to retry your last request.";
+                            } else {
+                                instructions = "You can now continue your interaction below.";
+                            }
+                        }
+                        addMessage('system', `✅ **Key(s) added and verified!** ${instructions}`);
+                    } catch (err) {
+                        setIsCheckingKey(false);
+                        addMessage('system', "⚠️ **Verification Failed:** The key you just added was rejected by Google. Did you follow the instructions? Please click the ⚙️ icon to try again.");
+                    }
+                }
 
                 // AUTO-RETRY if Locked
                 if (isSystemLocked && retryRequestRef.current) {
@@ -1265,7 +1319,7 @@ Output only your peer-style feedback                    `;
             return (
                 <div className="app-root">
                     <header>
-                        <div className="logo">IStudy <span style={{ fontSize: '0.5em', opacity: 0.6, verticalAlign: 'middle', fontWeight: 'normal' }}>1.0</span></div>
+                        <div className="logo">IStudy <span style={{ fontSize: '0.5em', opacity: 0.6, verticalAlign: 'middle', fontWeight: 'normal' }}>1.1</span></div>
                         <div className="settings-icon" onClick={() => setShowSettings(true)}>
                             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                 <circle cx="12" cy="12" r="3"></circle>
@@ -1669,7 +1723,7 @@ Output only your peer-style feedback                    `;
                                     </div>
 
                                     <div className="modal-actions">
-                                        <button className="btn-secondary" onClick={() => setShowSettings(false)}>Cancel</button>
+                                        <button className="btn-secondary" onClick={() => { setShowSettings(false); setIsPendingUpload(false); }}>Cancel</button>
                                         <button className="btn-primary" onClick={handleAddKeys}>Save Key</button>
                                     </div>
                                 </div>
