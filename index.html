@@ -390,6 +390,7 @@
             const [isWaitingForIntroDisclaimer, setIsWaitingForIntroDisclaimer] = useState(false);
             const [isSystemLocked, setIsSystemLocked] = useState(false);
             const [lastUserInput, setLastUserInput] = useState('');
+            const [isCheckingKey, setIsCheckingKey] = useState(false);
 
             // SCROLL CONTROL: Force "overflow: hidden" on Landing Page
             useEffect(() => {
@@ -481,18 +482,45 @@
                 }]);
             };
 
-            const handleUploadClick = () => {
-                if (apiKeys.length === 0) {
+            const handleUploadClick = async () => {
+                if (isCheckingKey) return;
+
+                const raw = localStorage.getItem('google_api_key');
+                let currentKeys = [];
+                if (raw) {
+                    try {
+                        const parsed = JSON.parse(raw);
+                        currentKeys = Array.isArray(parsed) ? parsed : [{ key: raw, label: 'Default' }];
+                    } catch (e) {
+                        currentKeys = [{ key: raw, label: 'Default' }];
+                    }
+                }
+                currentKeys = currentKeys.filter(k => k && k.key && k.key.trim().length > 10);
+
+                if (currentKeys.length === 0) {
                     setShowSettings(true);
                     return;
                 }
 
-                if (submission.student_email && roadmapData) {
-                    fileInputRef.current.click();
-                } else {
+                setIsCheckingKey(true);
+                try {
+                    // Quick validation request
+                    const testModel = selectedModel || 'gemini-3-flash-preview';
+                    await window.Core.GeminiRequest(testModel, "ping");
+                    setIsCheckingKey(false);
+
+                    // Proceed with original logic
+                    if (submission.student_email && roadmapData) {
+                        fileInputRef.current.click();
+                    } else {
+                        setView('chat');
+                        addMessage('system', "Before we get started, I need to confirm you are registered in this class. Please tell me the email address you used to register?");
+                        setIsVerifyingEmail(true);
+                    }
+                } catch (err) {
+                    setIsCheckingKey(false);
                     setView('chat');
-                    addMessage('system', "Before we get started, I need to confirm you are registered in this class. Please tell me the email address you used to register?");
-                    setIsVerifyingEmail(true);
+                    addMessage('system', "Your API key was rejected. Did you follow the instructions on the website? If you did, you may need to get a new API key with another account.");
                 }
             };
 
@@ -1261,13 +1289,17 @@ Output only your peer-style feedback                    `;
                                         </video>
                                     </div>
 
-                                    <button className="main-upload-btn" onClick={handleUploadClick}>
+                                    <button className={`main-upload-btn ${isCheckingKey ? 'disabled' : ''}`} onClick={handleUploadClick} disabled={isCheckingKey}>
                                         <span className="btn-icon">
-                                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
-                                                <circle cx="12" cy="13" r="4"></circle>
-                                            </svg>
-                                        </span> Upload Response Sheet
+                                            {isCheckingKey ? (
+                                                <div className="spinner"></div>
+                                            ) : (
+                                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+                                                    <circle cx="12" cy="13" r="4"></circle>
+                                                </svg>
+                                            )}
+                                        </span> {isCheckingKey ? "Checking Connection..." : "Upload Response Sheet"}
                                     </button>
 
 

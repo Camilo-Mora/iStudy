@@ -158,10 +158,15 @@ header {
     flex-shrink: 0;
 }
 
-.main-upload-btn:hover {
+.main-upload-btn:hover:not(:disabled) {
     background: #cbd5e1;
     transform: translateY(-1px);
     box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+}
+
+.main-upload-btn:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
 }
 
 .main-upload-btn .btn-icon {
@@ -549,6 +554,15 @@ header {
     to {
         transform: rotate(360deg);
     }
+}
+
+.spinner {
+    width: 20px;
+    height: 20px;
+    border: 3px solid rgba(51, 65, 85, 0.2);
+    border-top: 3px solid #334155;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
 }
 
 /* Settings Modal */
