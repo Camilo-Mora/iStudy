@@ -673,14 +673,11 @@
                         (k.toLowerCase().includes('chapter') || k.toLowerCase().includes('video')) && roadmapData[k]
                     ).length : 0;
 
-                    if (chaptersCompleted === 0) {
+                    if (chaptersCompleted < 4) {
                         addMessage('system', "This review may take up to 60 minutes, ensure you have that time available until you finish, as partial work cannot be saved. Ready to begin?");
                         setIsWaitingForReviewStart(true);
-                    } else if (chaptersCompleted < 4) {
-                        addMessage('system', "Are you ready?");
-                        setIsWaitingForReviewStart(true);
                     } else {
-                        addMessage('system', "Remember we need at least 60 minutes to finish reviewing your responses. Are you ready?");
+                        addMessage('system', "Remember we need at least 60 minutes to finish reviewing your responses. Ready to begin?");
                         setIsWaitingForReviewStart(true);
                     }
 
