@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Joker Eval Prompt Tester - iStudy v1.5</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/react-markdown@8.0.7/react-markdown.min.js"></script>
+
+    <style>
+        body {
+            padding: 20px;
+            background: #f8fafc;
+            font-family: 'Inter', sans-serif;
+            color: #1e293b;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #e2e8f0;
+        }
+
+        .header img {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            border: 2px solid #6366f1;
+        }
+
+        .grid-layout {
+            display: grid;
+            grid-template-columns: 400px 1fr;
+            gap: 30px;
+        }
+
+        .card {
+            background: white;
+            padding: 24px;
+            border-radius: 16px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+            margin-bottom: 20px;
+            border: 1px solid #e2e8f0;
+        }
+
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 8px;
+            font-size: 0.9em;
+            color: #475569;
+        }
+
+        input,
+        textarea,
+        select {
+            width: 100%;
+            padding: 12px;
+            border: 1.5px solid #e2e8f0;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            font-family: inherit;
+            font-size: 0.95em;
+            box-sizing: border-box;
+        }
+
+        textarea {
+            resize: vertical;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 14px;
+            background: #6366f1;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn:hover {
+            background: #4f46e5;
+        }
+
+        .btn:disabled {
+            background: #94a3b8;
+            cursor: not-allowed;
+        }
+
+        .results-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+        }
+
+        .model-card {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .model-name {
+            font-weight: 800;
+            font-size: 0.8em;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #6366f1;
+            padding: 4px 10px;
+            background: #eef2ff;
+            border-radius: 20px;
+            width: fit-content;
+        }
+
+        .output-box {
+            background: #f1f5f9;
+            padding: 16px;
+            border-radius: 12px;
+            font-family: 'Outfit', sans-serif;
+            font-size: 0.95em;
+            line-height: 1.6;
+            min-height: 200px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .prompt-preview {
+            background: #1e293b;
+            color: #e2e8f0;
+            padding: 20px;
+            border-radius: 12px;
+            font-family: monospace;
+            font-size: 0.85em;
+            white-space: pre-wrap;
+            margin-top: 10px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .tag-factual {
+            background: #dcfce7;
+            color: #166534;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+
+        .tag-challenge {
+            background: #fee2e2;
+            color: #991b1b;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+        const ReactMarkdown = window.ReactMarkdown?.default || window.ReactMarkdown;
+
+        const App = () => {
+            const [apiKey, setApiKey] = useState(localStorage.getItem('google_api_key') || '');
+            const [question, setQuestion] = useState("Explain overexploitation.");
+            const [verifiedContent, setVerifiedContent] = useState("Overexploitation occurs when a resource is consumed at a rate greater than its natural ability to replenish itself, leading to depletion or extinction.");
+            const [jokerStatement, setJokerStatement] = useState("If I remember correctly from the video, overexploitation happens when a population is able to replenish itself beyond natural levels – basically, when it's super healthy and thriving, and we take advantage of that. It's like having a really high-interest savings account and constantly making withdrawals; the bank actually benefits from the activity. Does that sound right to you?");
+            const [mode, setMode] = useState("CHALLENGE"); // Default to CHALLENGE because the statement above is a lie
+            const [studentResponse, setStudentResponse] = useState("false");
+
+            const [editablePrompt, setEditablePrompt] = useState("");
+            const [loading, setLoading] = useState(false);
+            const [results, setResults] = useState({
+                'gemini-3-flash-preview': '',
+                'gemini-2.5-flash': '',
+                'gemma-3-27b-it': ''
+            });
+
+            const generatePromptBody = (q, vc, js, m, sr) => {
+                return `### SYSTEM CONTEXT
+You are managing a "Critical Thinking Simulation" and have the intellect of a university professor. A student was presented with a specific claim. Your task is to evaluate if the student correctly identified whether that claim was factual or an inaccuracy.
+
+### DATA REFERENCE
+- **Verified Course Content:** "${vc}"
+- **Presented Claim (The Statement to evaluate):** "${js}"
+- **Student Response:** "${sr}"
+
+### INTERNAL EVALUATION LOGIC (Do not output)
+1. **Verification Phase:** Compare the [Presented Claim] against the [Verified Course Content]. 
+   - Determination: Is the claim FACTUAL or an INACCURACY?
+2. **Scoring Phase:**
+   - **SUCCESS:** The student rejected an INACCURACY or accepted a FACTUAL claim.
+   - **FAIL:** The student accepted an INACCURACY or rejected a FACTUAL claim.
+
+### RESPONSE GUIDELINES
+- **Persona:** Speak as a sharp, competitive peer who set a challenge for the student. 
+- **Tone:** Friendly, concise, direct and slightly challenging.(e.g., "Nice catch," "Gotcha," "Spot on"). , 
+- **First Sentence:** Provide a very brief assessment (e.g., "Correct, you didn't fall for the trap!" or "Incorrect, you fell for it.").
+- **Conclusion:** Concisely confirm the [Verified Course Content] to ensure the student learns the correct concept.
+- **Constraint:** Output ONLY the dialogue for the student. Max 2-3 sentences. No apologies for inaccuracies; they were deliberate challenges.`;
+            };
+
+            // Initial and auto-generation
+            useEffect(() => {
+                setEditablePrompt(generatePromptBody(question, verifiedContent, jokerStatement, mode, studentResponse));
+            }, [question, verifiedContent, jokerStatement, mode, studentResponse]);
+
+            const runTest = async () => {
+                if (!apiKey) return alert("Please enter an API Key");
+                setLoading(true);
+                localStorage.setItem('google_api_key', apiKey);
+
+                const prompt = editablePrompt; // Use the modified text
+                const models = ['gemini-3-flash-preview', 'gemini-2.5-flash', 'gemma-3-27b-it'];
+
+                const newResults = { ...results };
+
+                const promises = models.map(async (mId) => {
+                    try {
+                        const url = `https://generativelanguage.googleapis.com/v1beta/models/${mId}:generateContent?key=${apiKey.replace(/"/g, '').trim()}`;
+
+                        // ADDING SAFETY SETTINGS TO PREVENT FILTERS
+                        const response = await fetch(url, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                contents: [{ parts: [{ text: prompt }] }],
+                                safetySettings: [
+                                    { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
+                                    { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+                                    { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+                                    { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
+                                ]
+                            })
+                        });
+                        const data = await response.json();
+
+                        if (data.error) throw new Error(data.error.message);
+
+                        const candidate = data.candidates?.[0];
+                        const text = candidate?.content?.parts?.[0]?.text;
+                        const reason = candidate?.finishReason || "UNKNOWN";
+
+                        if (text) {
+                            newResults[mId] = text;
+                        } else {
+                            newResults[mId] = `⚠️ **Blocked/Empty**\nReason: ${reason}\n${JSON.stringify(data.promptFeedback || {})}`;
+                        }
+                    } catch (err) {
+                        newResults[mId] = "Error: " + err.message;
+                    }
+                });
+
+                await Promise.all(promises);
+                setResults(newResults);
+                setLoading(false);
+            };
+
+            return (
+                <div className="container">
+                    <div className="header">
+                        <img src="assets/avatar_joker.png" alt="Joker" />
+                        <div>
+                            <h1 style={{ margin: 0, fontSize: '1.8em' }}>Joker Eval Logic Tester</h1>
+                            <p style={{ margin: 0, opacity: 0.7 }}>Fine-tuning the "Surgical Judge" prompt to fix Sycophancy Bugs.</p>
+                        </div>
+                    </div>
+
+                    <div className="grid-layout">
+                        <div className="sidebar">
+                            <div className="card">
+                                <label>Google API Key</label>
+                                <input type="password" value={apiKey} onChange={e => setApiKey(e.target.value)} placeholder="AI Studio Key..." />
+
+                                <label>1. Original Question</label>
+                                <textarea rows="2" value={question} onChange={e => setQuestion(e.target.value)} />
+
+                                <label>2. Verified Lecture Content (The Truth)</label>
+                                <textarea rows="3" value={verifiedContent} onChange={e => setVerifiedContent(e.target.value)} />
+
+                                <label>3. Joker's Target Mode</label>
+                                <select value={mode} onChange={e => setMode(e.target.value)}>
+                                    <option value="FACTUAL">FACTUAL (Joker telling the truth)</option>
+                                    <option value="CHALLENGE">CHALLENGE (Joker setting a trap/lying)</option>
+                                </select>
+                                <div style={{ marginBottom: '10px', fontSize: '0.8em' }}>
+                                    Current Mode: {mode === 'FACTUAL' ? <span className="tag-factual">FACTUAL</span> : <span className="tag-challenge">CHALLENGE</span>}
+                                </div>
+
+                                <label>4. Joker's Previous Statement (The "Act")</label>
+                                <textarea rows="4" value={jokerStatement} onChange={e => setJokerStatement(e.target.value)} />
+
+                                <label>5. Student's Reaction</label>
+                                <input type="text" value={studentResponse} onChange={e => setStudentResponse(e.target.value)} />
+
+                                <button className="btn" onClick={runTest} disabled={loading}>
+                                    {loading ? <div className="spinner" /> : "🔥 Test Prompt Across Models"}
+                                </button>
+                            </div>
+
+                            <div className="card" style={{ background: '#1e293b', border: 'none' }}>
+                                <label style={{ color: '#94a3b8', display: 'flex', justifyContent: 'space-between' }}>
+                                    Final Prompt (Editable)
+                                    <span style={{ cursor: 'pointer', textDecoration: 'underline' }} onClick={() => setEditablePrompt(generatePromptBody(question, verifiedContent, jokerStatement, mode, studentResponse))}>Reset to Default Template</span>
+                                </label>
+                                <textarea
+                                    className="prompt-preview"
+                                    style={{ width: '100%', border: 'none', background: 'transparent', outline: 'none', color: '#e2e8f0', minHeight: '600px' }}
+                                    value={editablePrompt}
+                                    onChange={e => setEditablePrompt(e.target.value)}
+                                />
+                            </div>
+                        </div>
+
+                        <div className="results-list">
+                            <div className="results-grid">
+                                {Object.entries(results).map(([mId, content]) => (
+                                    <div key={mId} className="model-card">
+                                        <div className="model-name">{mId.replace('-preview', '').replace('-it', '')}</div>
+                                        <div className="card output-box">
+                                            <ReactMarkdown>{content}</ReactMarkdown>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+
+                            <div className="card" style={{ marginTop: '30px', background: '#ecfdf5', borderColor: '#d1fae5' }}>
+                                <h3 style={{ margin: '0 0 10px 0', color: '#065f46' }}>Test Case Analysis</h3>
+                                <p style={{ fontSize: '0.9em', color: '#065f46' }}>
+                                    <strong>Default Scenario:</strong> Joker's statement says overexploitation happens when a population "is able to replenish itself" (False).
+                                    <br /><strong>Student says:</strong> "false" (Correct).
+                                    <br /><strong>Logic Check:</strong> If <i>Mode=CHALLENGE</i> and <i>Response=false</i>, Joker should congratulate the student for not falling for his trap. If Joker apologizes or says he was being "accurate", the prompt failed.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+
+</html>

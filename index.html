@@ -191,7 +191,15 @@
                             const response = await fetch(url, {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ contents: [{ parts: [{ text: promptText }] }] })
+                                body: JSON.stringify({
+                                    contents: [{ parts: [{ text: promptText }] }],
+                                    safetySettings: [
+                                        { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
+                                        { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+                                        { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+                                        { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
+                                    ]
+                                })
                             });
 
                             const data = await response.json();
@@ -972,30 +980,27 @@ Output *only* your dialogue as Joker. No labels. No preamble. No "Version 1". Ju
                         return;
                     } else {
                         setIsProcessing(true);
-                        const jokerEvalPrompt = `### EDUCATIONAL CONTEXT
-This is a pedagogical exercise for a Biogeography course, in which students are being tested in their capacity to critically discern between facts or alternative misconstructions, or falsehoods. 
+                        const jokerEvalPrompt = `### SYSTEM CONTEXT
+You are managing a "Critical Thinking Simulation" and have the intellect of a university professor. A student was presented with a specific claim. Your task is to evaluate if the student correctly identified whether that claim was factual or an inaccuracy.
 
-### ROLE
-You are "Joker," a peer student. In the previous turn, you presented the student with either a Factual statement (a paraphrased version of the valid lecture content) or a Misconstructed statement. Your role is to check if the student correctly identified the statement as factual or not, and provide feedback that clarifies the concept.
+### DATA REFERENCE
+- **Verified Course Content:** "${analysis.model_answer}"
+- **Presented Claim (The Statement to evaluate):** "${jokerData.statement}"
+- **Student Response:** "${studentMsg}"
 
-### INPUT DATA
-1. **Verified Lecture Content:** "${analysis.model_answer}"
-2. **Your Previous Statement:** "${jokerData.statement}"
-3. **Student's Reaction:** "${studentMsg}"
+### INTERNAL EVALUATION LOGIC (Do not output)
+1. **Verification Phase:** Compare the [Presented Claim] against the [Verified Course Content]. 
+   - Determination: Is the claim FACTUAL or an INACCURACY?
+2. **Scoring Phase:**
+   - **SUCCESS:** The student rejected an INACCURACY or accepted a FACTUAL claim.
+   - **FAIL:** The student accepted an INACCURACY or rejected a FACTUAL claim.
 
-### TASK
-1. **The Reality Check:** Compare your **Previous Statement** against the **Verified Lecture Content**.
-   - Determine if your actual words were accurate or contained a misconstruction (regardless of your original intent).
-2. **The Assessment:** Determine if the student's reaction correctly identified the nature of your statement.
-3. **The Feedback (The "Why"):** Provide brief, engaging peer-to-peer feedback.
-   - **Explain the logic:** Briefly state **why** the statement was factual or misconstructed by referencing the **Verified Lecture Content**.
-   - If they were right -> Congratulate their discernment and confirm the scientific truth.
-   - If they were wrong -> Tease them slightly for falling for the trick (or missing the accuracy), then clarify the truth.
-
-### MANDATORY RULES
-* **Tone:** Confident, peer-student persona (Joker). **Do not sound like a professor.** Sound like a classmate who's sharp and slightly competitive.
-* **No Admissions:** Never admit to "hallucinating" or "making a mistake." If your statement was wrong, it was a deliberate trick (Misconstruction).
-* **Length:** Keep the explanation to 1-2 concise sentences.`;
+### RESPONSE GUIDELINES
+- **Persona:** Speak as a sharp, competitive peer who set a challenge for the student. 
+- **Tone:** Friendly, concise, direct and slightly challenging.(e.g., "Nice catch," "Gotcha," "Spot on"). , 
+- **First Sentence:** Provide a very brief assessment (e.g., "Correct, you didn't fall for the trap!" or "Incorrect, you fell for it.").
+- **Conclusion:** Concisely confirm the [Verified Course Content] to ensure the student learns the correct concept.
+- **Constraint:** Output ONLY the dialogue for the student. Max 2-3 sentences. No apologies for inaccuracies; they were deliberate challenges.`;
 
                         const jokerResponse = await invokeLLM(jokerEvalPrompt, commonContext);
                         if (!jokerResponse) return; // HALT if Locked
