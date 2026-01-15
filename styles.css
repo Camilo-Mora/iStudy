@@ -201,13 +201,13 @@ header {
     display: flex;
     flex-direction: column;
     gap: 20px;
-    padding-bottom: 120px;
+    padding-bottom: 160px;
     padding-top: 20px;
     opacity: 0;
     transform: translateY(20px);
     transition: all 0.5s ease;
     min-height: calc(100vh - 200px);
-    justify-content: flex-end;
+    justify-content: flex-start;
 }
 
 .chat-container.active {
@@ -740,6 +740,92 @@ header {
     font-size: 12px;
     margin-bottom: 10px;
     font-weight: 600;
+}
+
+/* Mission Briefing Card */
+.mission-briefing-card {
+    text-align: left;
+    padding: 10px 5px;
+}
+
+.mission-briefing-card h2 {
+    font-size: 22px;
+    margin-bottom: 16px;
+    color: var(--slate-900);
+}
+
+.briefing-intro-text {
+    font-size: 15px;
+    line-height: 1.6;
+    margin-bottom: 20px;
+    color: var(--slate-700);
+}
+
+.briefing-avatars-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.briefing-avatar-row {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+}
+
+.briefing-avatar-img {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    border: 1px solid var(--slate-200);
+    object-fit: cover;
+}
+
+.briefing-avatar-content {
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.briefing-avatar-content strong {
+    color: var(--slate-900);
+}
+
+.briefing-result-box {
+    background: var(--slate-50);
+    padding: 15px;
+    border-radius: 12px;
+    margin-bottom: 20px;
+    border-left: 4px solid var(--primary);
+}
+
+.briefing-result-item {
+    font-size: 14px;
+    margin-bottom: 8px;
+}
+
+.briefing-result-item:last-child {
+    margin-bottom: 0;
+}
+
+.briefing-start-btn {
+    width: 100%;
+    padding: 14px;
+    background: var(--slate-800);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    font-weight: 700;
+    font-size: 16px;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-top: 10px;
+}
+
+.briefing-start-btn:hover {
+    background: var(--slate-900);
+    transform: translateY(-1px);
 }
 
 /* ========================================

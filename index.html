@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>iStudy 1.4 - Student Essay Review System</title>
+    <title>iStudy 1.5 - Student Essay Review System</title>
     <link rel="stylesheet" href="styles.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -407,6 +407,7 @@
             const [isCheckingKey, setIsCheckingKey] = useState(false);
             const [isPendingUpload, setIsPendingUpload] = useState(false);
             const [isSubmitting, setIsSubmitting] = useState(false);
+            const [isWaitingForBriefing, setIsWaitingForBriefing] = useState(false);
 
             // SCROLL CONTROL: Force "overflow: hidden" on Landing Page
             useEffect(() => {
@@ -524,8 +525,9 @@
                         fileInputRef.current.click();
                     } else {
                         setView('chat');
-                        addMessage('system', "Before we get started, I need to confirm you are registered in this class. Please tell me the email address you used to register?");
-                        setIsVerifyingEmail(true);
+                        // Version 1.5: Added starting disclaimer about mission and time requirements
+                        addMessage('system', null, 'mission_briefing');
+                        setIsWaitingForBriefing(true);
                     }
                 } catch (err) {
                     setIsCheckingKey(false);
@@ -672,11 +674,11 @@
                     ).length : 0;
 
                     if (chaptersCompleted === 0) {
-                        addMessage('system', "Here we will review your responses. This may take up to 60 minutes, ensure you have that time available until you finish, as partial work cannot be saved. \n\nOur purpose here is threefold: 1) ensure that you collected the correct information, 2) that you understand the information, and 3) that you can critically use it. For that you will interact with three different AI agents. Ready to meet them?");
-                        setIsWaitingForIntroDisclaimer(true);
+                        addMessage('system', "This review may take up to 60 minutes, ensure you have that time available until you finish, as partial work cannot be saved. Ready to begin?");
+                        setIsWaitingForReviewStart(true);
                     } else if (chaptersCompleted < 4) {
-                        addMessage('system', "Remember you need at least 60 minutes to finish this work, and that you will be talking to three different AI agents. Ready to meet them?");
-                        setIsWaitingForIntroDisclaimer(true);
+                        addMessage('system', "Are you ready?");
+                        setIsWaitingForReviewStart(true);
                     } else {
                         addMessage('system', "Remember we need at least 60 minutes to finish reviewing your responses. Are you ready?");
                         setIsWaitingForReviewStart(true);
@@ -1019,26 +1021,8 @@ You are "Joker," a peer student. In the previous turn, you presented the student
             };
 
             const runAvatarIntroductions = async () => {
-                setIsProcessing(true);
-                const chaptersCompleted = roadmapData ? Object.keys(roadmapData).filter(k =>
-                    (k.toLowerCase().includes('chapter') || k.toLowerCase().includes('video')) && roadmapData[k]
-                ).length : 0;
-
-                if (chaptersCompleted === 0) {
-                    // Full Ceremony
-                    addMessage('newton', "I am Newton. My job is to measure the accuracy of your logic against the lecture material. I’ll provide a score and feedback to help you calibrate your understanding. Don't worry—this isn't a grade; it’s a diagnostic tool to help you sharpen your focus for future videos.");
-                    await new Promise(r => setTimeout(r, 2000));
-                    addMessage('tontin', "My name is Tontin. I will always ask you to explain the material in your own words. My role is to ensure you have a confident grasp of the course content and can express complex ideas clearly and independently.");
-                    await new Promise(r => setTimeout(r, 2000));
-                    addMessage('joker', "My name is Joker. I may or may not attempt to deceive you with my statements. My role is to help you become a critical thinker by challenging you to distinguish between accurate, partially correct, and completely false information.");
-                } else {
-                    // Team Huddle
-                    addMessage('newton', "Newton here. Ready to verify your responses.");
-                    addMessage('tontin', "Hi, this is Tontin, and I may still need you to explain things to me.");
-                    addMessage('joker', "This is Joker here... watch out, as I may pull some tricks on you.");
-                }
-
-                await new Promise(r => setTimeout(r, 2000));
+                // Version 1.5: Character intros are now part of the Mission Briefing.
+                // We directly trigger the review start question.
                 addMessage('system', "**Let's review your responses one by one. Are you ready?**");
                 setIsWaitingForReviewStart(true);
                 setIsProcessing(false);
@@ -1130,6 +1114,14 @@ You are "Joker," a peer student. In the previous turn, you presented the student
                     } else {
                         addMessage('system', `❌ Question **${id}** not found. Please click "Edit a Response" again if you wish to try a different number.`);
                     }
+                    return;
+                }
+
+                if (isWaitingForBriefing) {
+                    // This block is for text-based fallback, but the button should handle it
+                    setIsWaitingForBriefing(false);
+                    addMessage('system', "Before we get started, I need to confirm you are registered in this class. Please tell me the email address you used to register?");
+                    setIsVerifyingEmail(true);
                     return;
                 }
 
@@ -1327,15 +1319,27 @@ You are "Joker," a peer student. In the previous turn, you presented the student
             const messagesEndRef = React.useRef(null);
 
             React.useEffect(() => {
-                if (messagesEndRef.current) {
-                    messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
-                }
-            }, [messages]);
+                const scrollToBottom = () => {
+                    // Using window.scrollTo(0, document.body.scrollHeight) is the most reliable
+                    // way to hit the absolute bottom of a page-scrolled chat.
+                    window.scrollTo({
+                        top: document.documentElement.scrollHeight,
+                        behavior: 'smooth'
+                    });
+                };
+
+                // Trigger scroll on message update
+                scrollToBottom();
+
+                // Double-check after layout/images settle
+                const timer = setTimeout(scrollToBottom, 350);
+                return () => clearTimeout(timer);
+            }, [messages, view]);
 
             return (
                 <div className="app-root">
                     <header>
-                        <div className="logo">IStudy <span style={{ fontSize: '0.5em', opacity: 0.6, verticalAlign: 'middle', fontWeight: 'normal' }}>1.4</span></div>
+                        <div className="logo">IStudy <span style={{ fontSize: '0.5em', opacity: 0.6, verticalAlign: 'middle', fontWeight: 'normal' }}>1.5</span></div>
                         <div className="settings-icon" onClick={() => setShowSettings(true)}>
                             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                 <circle cx="12" cy="12" r="3"></circle>
@@ -1467,6 +1471,50 @@ You are "Joker," a peer student. In the previous turn, you presented the student
                                                                         );
                                                                     })()}
                                                                 </div>
+                                                            </div>
+                                                        ) : msg.type === 'mission_briefing' ? (
+                                                            <div className="mission-briefing-card">
+                                                                <h2>🎯 Mission Briefing</h2>
+                                                                <p className="briefing-intro-text">
+                                                                    In this app, we will review your responses through three different approaches.
+                                                                    <br /><br />
+                                                                    I know this may feel repetitive and time-consuming (up to 60 minutes per chapter), but this is <strong>by design</strong>. To truly master a concept, you need to flex three different mental muscles:
+                                                                </p>
+
+                                                                <div className="briefing-avatars-list">
+                                                                    <div className="briefing-avatar-row">
+                                                                        <img src="assets/avatar_newton.png" className="briefing-avatar-img" />
+                                                                        <div className="briefing-avatar-content">
+                                                                            <strong>Getting the facts right. </strong>
+                                                                            For this, <strong>Newton</strong> will measure the accuracy of your responses against the lecture material.
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="briefing-avatar-row">
+                                                                        <img src="assets/avatar_tontin.png" className="briefing-avatar-img" />
+                                                                        <div className="briefing-avatar-content">
+                                                                            <strong>The power of explanation. </strong>
+                                                                            The best proof that you know something is when you can explain it to someone else! <strong>Tontin</strong> here is in need of some explaining.
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="briefing-avatar-row">
+                                                                        <img src="assets/avatar_joker.png" className="briefing-avatar-img" />
+                                                                        <div className="briefing-avatar-content">
+                                                                            <strong>Critical Thinking. </strong>
+                                                                            For this, <strong>Joker</strong> may or may not attempt to deceive you with his statements. Think critically about what he says—he may pull some tricks on you!
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+
+                                                                <div className="briefing-result-box">
+                                                                    <div className="briefing-result-item"><strong>THE RESULT:</strong> "Hack-proofed" knowledge.</div>
+                                                                    <div className="briefing-result-item"><strong>THE PAYOFF:</strong> I've allocated a large fraction of the grade (<strong>up to B+</strong>) for this effort alone, significantly reducing your stress over high-stakes exams.</div>
+                                                                </div>
+
+                                                                <button id="briefing-start-btn" className="briefing-start-btn" onClick={() => {
+                                                                    setIsWaitingForBriefing(false);
+                                                                    addMessage('system', "Before we get started, I need to confirm you are registered in this class. Please tell me the email address you used to register?");
+                                                                    setIsVerifyingEmail(true);
+                                                                }}>Click to start</button>
                                                             </div>
                                                         ) : msg.type === 'roadmap' ? (
                                                             <div className="roadmap-container">
