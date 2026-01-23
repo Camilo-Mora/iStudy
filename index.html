@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>iStudy 1.5 - Student Essay Review System</title>
+    <title>iStudy 1.6 - Student Essay Review System</title>
     <link rel="stylesheet" href="styles.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1339,7 +1339,7 @@ You are managing a "Critical Thinking Simulation" and have the intellect of a un
             return (
                 <div className="app-root">
                     <header>
-                        <div className="logo">IStudy <span style={{ fontSize: '0.5em', opacity: 0.6, verticalAlign: 'middle', fontWeight: 'normal' }}>1.5</span></div>
+                        <div className="logo">IStudy <span style={{ fontSize: '0.5em', opacity: 0.6, verticalAlign: 'middle', fontWeight: 'normal' }}>1.6</span></div>
                         <div className="settings-icon" onClick={() => setShowSettings(true)}>
                             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                 <circle cx="12" cy="12" r="3"></circle>
@@ -1426,50 +1426,54 @@ You are managing a "Critical Thinking Simulation" and have the intellect of a un
                                                                         addMessage('system', "Which question number would you like to edit? (Enter the digit, e.g., 1)");
                                                                     }}>Edit a Response</button>
 
-                                                                    {(() => {
-                                                                        const r = generateReportData();
-                                                                        const canSubmit = !!submission.student_email;
-                                                                        return (
-                                                                            <a
-                                                                                href={canSubmit ? r.uri : "javascript:void(0)"}
-                                                                                download={canSubmit ? r.fileName : undefined}
-                                                                                className={`btn - primary ${!canSubmit ? 'disabled' : ''} `}
-                                                                                style={{
-                                                                                    textDecoration: 'none',
-                                                                                    textAlign: 'center',
-                                                                                    display: 'block',
-                                                                                    width: '100%',
-                                                                                    boxSizing: 'border-box',
-                                                                                    opacity: (canSubmit && !isSubmitting) ? 1 : 0.5,
-                                                                                    cursor: (canSubmit && !isSubmitting) ? 'pointer' : 'not-allowed',
-                                                                                    pointerEvents: (canSubmit && !isSubmitting) ? 'auto' : 'none'
-                                                                                }}
-                                                                                onClick={async (e) => {
-                                                                                    if (!canSubmit || isSubmitting) {
-                                                                                        e.preventDefault();
-                                                                                        return;
-                                                                                    }
-                                                                                    setIsSubmitting(true);
-                                                                                    setIsProcessing(true);
-                                                                                    addMessage('system', "Processing...");
-                                                                                    try {
-                                                                                        await window.Core.RegisterCompletion(
-                                                                                            submission.student_email,
-                                                                                            parseInt(submission.chapter, 10)
-                                                                                        );
-                                                                                        setTimeout(() => setView('completion'), 1500);
-                                                                                    } catch (err) {
-                                                                                        setView('completion');
-                                                                                    } finally {
-                                                                                        setIsProcessing(false);
-                                                                                        setIsSubmitting(false);
-                                                                                    }
-                                                                                }}
-                                                                            >
-                                                                                Approve & Submit
-                                                                            </a>
-                                                                        );
-                                                                    })()}
+                                                                    <button
+                                                                        className={`btn-primary ${!submission.student_email ? 'disabled' : ''}`}
+                                                                        style={{
+                                                                            textAlign: 'center',
+                                                                            display: 'block',
+                                                                            width: '100%',
+                                                                            boxSizing: 'border-box',
+                                                                            opacity: (submission.student_email && !isSubmitting) ? 1 : 0.5,
+                                                                            cursor: (submission.student_email && !isSubmitting) ? 'pointer' : 'not-allowed'
+                                                                        }}
+                                                                        onClick={async (e) => {
+                                                                            if (!submission.student_email || isSubmitting) return;
+
+                                                                            setIsSubmitting(true);
+                                                                            setIsProcessing(true);
+                                                                            addMessage('system', "Downloading your report and registering completion...");
+
+                                                                            try {
+                                                                                // 1. First trigger the download manually
+                                                                                const r = generateReportData();
+                                                                                const link = document.createElement('a');
+                                                                                link.href = r.uri;
+                                                                                link.download = r.fileName;
+                                                                                document.body.appendChild(link);
+                                                                                link.click();
+                                                                                document.body.removeChild(link);
+
+                                                                                // 2. Wait a brief moment to ensure Safari handles the download start
+                                                                                await new Promise(res => setTimeout(res, 800));
+
+                                                                                // 3. Then send the tick to Google Sheets
+                                                                                await window.Core.RegisterCompletion(
+                                                                                    submission.student_email,
+                                                                                    parseInt(submission.chapter, 10)
+                                                                                );
+
+                                                                                setTimeout(() => setView('completion'), 1000);
+                                                                            } catch (err) {
+                                                                                console.error("Submission error:", err);
+                                                                                setView('completion');
+                                                                            } finally {
+                                                                                setIsProcessing(false);
+                                                                                setIsSubmitting(false);
+                                                                            }
+                                                                        }}
+                                                                    >
+                                                                        Approve & Submit
+                                                                    </button>
                                                                 </div>
                                                             </div>
                                                         ) : msg.type === 'mission_briefing' ? (
