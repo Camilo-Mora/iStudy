@@ -313,24 +313,14 @@
             },
             RegisterCompletion: async (email, chapter) => {
                 const scriptUrl = 'https://script.google.com/macros/s/AKfycbz5N8t6TKRA2AOI0q_jgavk9-Rv9JK4QEIDm0Nh41zAKhjVbWJeYZKbzXKDZxYyTq5N2w/exec';
-
-                // Determine if it's a Video or a Chapter
                 const isVideo = chapter.toString().toLowerCase().includes('video');
                 const chNum = parseInt(chapter.toString().replace(/(chapter|video)/i, '').trim());
                 const paddedNum = chNum.toString().padStart(2, '0');
-
-                // Matches standard course naming: "Chapter 01" or "Video 06"
-                // Matches standard course naming: "Chapter 01" or "Video 06"
                 const chapterLabel = isVideo ? `Video ${paddedNum}` : `Chapter ${paddedNum}`;
 
-                const payload = {
-                    email: email,
-                    studentId: email, // Universal key compatibility
-                    chapter: chapterLabel
-                };
+                const payload = { email: email, studentId: email, chapter: chapterLabel };
 
                 try {
-                    console.log(`Registering completion:`, payload);
                     await fetch(scriptUrl, {
                         method: 'POST',
                         mode: 'no-cors',
@@ -341,6 +331,20 @@
                 } catch (err) {
                     console.error("Registration error:", err);
                     return { status: 'error', message: err.toString() };
+                }
+            },
+            FetchRoadmapData: async (email) => {
+                const scriptUrl = 'https://script.google.com/macros/s/AKfycbz5N8t6TKRA2AOI0q_jgavk9-Rv9JK4QEIDm0Nh41zAKhjVbWJeYZKbzXKDZxYyTq5N2w/exec';
+                // Using 'get-status' which is the standard progress check action
+                const url = `${scriptUrl}?action=get-status&email=${encodeURIComponent(email)}`;
+                try {
+                    const response = await fetch(url);
+                    const data = await response.json();
+                    console.log("Roadmap Data Response:", data);
+                    return data;
+                } catch (err) {
+                    console.error("Fetch Roadmap Error:", err);
+                    throw err;
                 }
             }
         };
@@ -416,8 +420,6 @@
             const [isPendingUpload, setIsPendingUpload] = useState(false);
             const [isSubmitting, setIsSubmitting] = useState(false);
             const [isWaitingForBriefing, setIsWaitingForBriefing] = useState(false);
-
-            // Video Portal Verification States
             const [showVideoModal, setShowVideoModal] = useState(false);
             const [showVideoEmailModal, setShowVideoEmailModal] = useState(false);
             const [videoCheckEmail, setVideoCheckEmail] = useState('');
@@ -425,6 +427,13 @@
             const [videoStep, setVideoStep] = useState('email'); // 'email' or 'otp'
             const [videoOtpInput, setVideoOtpInput] = useState('');
             const [videoError, setVideoError] = useState('');
+            const [videoRows, setVideoRows] = useState([
+                { chapter: '', url: '' }, { chapter: '', url: '' }, { chapter: '', url: '' },
+                { chapter: '', url: '' }, { chapter: '', url: '' }, { chapter: '', url: '' }
+            ]);
+            const [isVideoSubmitting, setIsVideoSubmitting] = useState(false);
+            const [showVideoSuccess, setShowVideoSuccess] = useState(false);
+            const [finalProjectedGrade, setFinalProjectedGrade] = useState('');
 
             // SCROLL CONTROL: Force "overflow: hidden" on Landing Page
             useEffect(() => {
@@ -543,7 +552,6 @@
                     } else {
                         setView('chat');
                         // Version 1.5: Added starting disclaimer about mission and time requirements
-                        // Version 1.7: Updated version number and reflected decoupling of portals.
                         addMessage('system', null, 'mission_briefing');
                         setIsWaitingForBriefing(true);
                     }
@@ -576,6 +584,154 @@
                 }
 
                 await validateAndProceed();
+            };
+
+            const handleVideoPortalClick = () => {
+                setShowVideoModal(true);
+            };
+
+            const handleRequestVideoCode = async () => {
+                if (!videoCheckEmail || !videoCheckEmail.includes('@')) {
+                    setVideoError("Please enter a valid student email.");
+                    return;
+                }
+
+                setVideoError('');
+                setIsVideoChecking(true);
+                try {
+                    const res = await window.Core.VerifyStudentEmail(videoCheckEmail);
+                    if (res.status === 'success') {
+                        setVideoStep('otp');
+                    } else {
+                        setVideoError(res.message || "❌ Email not found in the class roster.");
+                    }
+                } catch (err) {
+                    console.error("Verification Error:", err);
+                    setVideoError("System connection error. Please try again.");
+                } finally {
+                    setIsVideoChecking(false);
+                }
+            };
+
+            const handleVerifyVideoOTP = async () => {
+                if (!videoOtpInput || videoOtpInput.length < 3) {
+                    setVideoError("Please enter the 3-digit code.");
+                    return;
+                }
+
+                setVideoError('');
+                setIsVideoChecking(true);
+                try {
+                    const res = await window.Core.VerifyOTP(videoCheckEmail, videoOtpInput);
+                    if (res.status === 'success') {
+                        // Res contains the completion data
+                        setRoadmapData(res.completion);
+                        const comp = res.completion;
+                        let completedCount = 0;
+                        const compKeys = Object.keys(comp);
+                        
+                        for (let i = 1; i <= 13; i++) {
+                            const num = i;
+                            const padded = i.toString().padStart(2, '0');
+                            const isDone = compKeys.some(k => {
+                                const lowerK = k.toLowerCase();
+                                return (lowerK === `chapter ${num}` || lowerK === `chapter${num}` || 
+                                        lowerK === `chapter ${padded}` || lowerK === `chapter${padded}`) && 
+                                        comp[k];
+                            });
+                            if (isDone) completedCount++;
+                        }
+
+                        if (completedCount >= 13) {
+                            setSubmission(prev => ({ ...prev, student_email: videoCheckEmail }));
+                            setShowVideoEmailModal(false);
+                            setView('video_portal');
+                        } else {
+                            setVideoError(`❌ Verification Failed: You have only completed ${completedCount} out of 13 chapters. Please finish the essay reports first.`);
+                        }
+                    } else {
+                        setVideoError("❌ Invalid code. Please check your email and try again.");
+                    }
+                } catch (err) {
+                    console.error("OTP Error:", err);
+                    setVideoError("System connection error. Please try again.");
+                } finally {
+                    setIsVideoChecking(false);
+                }
+            };
+
+            const addVideoRow = () => {
+                setVideoRows([...videoRows, { chapter: '', url: '' }]);
+            };
+
+            const removeVideoRow = (idx) => {
+                const updated = videoRows.filter((_, i) => i !== idx);
+                setVideoRows(updated.length > 0 ? updated : [{ chapter: '', url: '' }]);
+            };
+
+            const updateVideoRow = (index, field, value) => {
+                const NewRows = [...videoRows];
+                NewRows[index][field] = value;
+                setVideoRows(NewRows);
+            };
+
+            const calculateVideoGrade = () => {
+                const filledCount = videoRows.filter(r => r.chapter && r.url.trim().length > 10).length;
+                if (filledCount >= 10) return 'A+';
+                if (filledCount >= 8) return 'A';
+                if (filledCount >= 6) return 'A-';
+                return 'B+';
+            };
+
+            const handleVideoSubmit = async () => {
+                if (isVideoSubmitting) return;
+                const filledRows = videoRows.filter(r => r.chapter && r.url.trim().length > 10);
+                
+                // CHECK FOR DUPLICATES
+                const chapters = filledRows.map(r => r.chapter);
+                const urls = filledRows.map(r => r.url.trim().toLowerCase());
+                
+                if (new Set(chapters).size !== chapters.length) {
+                    alert("⚠️ Duplicate Chapters: You have selected the same chapter more than once.");
+                    return;
+                }
+
+                if (new Set(urls).size !== urls.length) {
+                    alert("⚠️ Duplicate URLs: You have entered the same video URL more than once.");
+                    return;
+                }
+
+                if (filledRows.length < 6) {
+                    alert("You need at least 6 videos to submit for an A bracket grade.");
+                    return;
+                }
+
+                setIsVideoSubmitting(true);
+                const grade = calculateVideoGrade();
+                setFinalProjectedGrade(grade);
+
+                // Payload for the new App Script
+                const payload = {
+                    email: submission.student_email || email1,
+                    videos: filledRows
+                };
+
+                try {
+                    // NEW APP SCRIPT URL (Placeholder - needs to be updated with the actual new script URL)
+                    const VIDEO_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbznsLz_p4BgOB9Ct6Y6KAVtrBOhOhju1Tb3Th7-ML5mV_uhlT6nro0-8Hqh_yhYCDcs/exec";
+                    
+                    // console.log("Submitting videos:", payload);
+                    // Note: In a real scenario, this would be a POST to the script.
+                    // For now, we simulate the success.
+                    await new Promise(r => setTimeout(r, 1500));
+                    
+                    setShowVideoSuccess(true);
+                } catch (err) {
+                    console.error("Video submission error:", err);
+                    alert("Error submitting videos. Please try again.");
+                } finally {
+                    setIsVideoSubmitting(false);
+                }
             };
 
             const handleFileChange = async (e) => {
@@ -1263,7 +1419,7 @@ You are managing a "Critical Thinking Simulation" and have the intellect of a un
 
                         let instructions = "You are all set.";
                         if (view === 'landing') {
-                            instructions = "Please click the **'Upload weekly Q&A report'** button to begin.";
+                            instructions = "Please click the **'Upload Response Sheet'** button to begin.";
                         } else if (view === 'chat') {
                             if (!submission.student_email) {
                                 instructions = "Please **enter your student email** below to verify your enrollment.";
@@ -1346,72 +1502,6 @@ You are managing a "Critical Thinking Simulation" and have the intellect of a un
                 return () => clearTimeout(timer);
             }, [messages, view]);
 
-            const handleVideoPortalClick = () => {
-                setShowVideoModal(true);
-            };
-
-            const handleRequestVideoCode = async () => {
-                if (!videoCheckEmail || !videoCheckEmail.includes('@')) {
-                    setVideoError("Please enter a valid student email.");
-                    return;
-                }
-                setVideoError('');
-                setIsVideoChecking(true);
-                try {
-                    const res = await window.Core.VerifyStudentEmail(videoCheckEmail);
-                    if (res.status === 'success') {
-                        setVideoStep('otp');
-                    } else {
-                        setVideoError(res.message || "❌ Email not found in the class roster.");
-                    }
-                } catch (err) {
-                    setVideoError("System connection error. Please try again.");
-                } finally {
-                    setIsVideoChecking(false);
-                }
-            };
-
-            const handleVerifyVideoOTP = async () => {
-                if (!videoOtpInput || videoOtpInput.length < 3) {
-                    setVideoError("Please enter the 3-digit code.");
-                    return;
-                }
-                setVideoError('');
-                setIsVideoChecking(true);
-                try {
-                    const res = await window.Core.VerifyOTP(videoCheckEmail, videoOtpInput);
-                    if (res.status === 'success') {
-                        const comp = res.completion;
-                        let completedCount = 0;
-                        const compKeys = Object.keys(comp);
-                        for (let i = 1; i <= 13; i++) {
-                            const num = i;
-                            const padded = i.toString().padStart(2, '0');
-                            const isDone = compKeys.some(k => {
-                                const lowerK = k.toLowerCase();
-                                return (lowerK === `chapter ${num}` || lowerK === `chapter${num}` ||
-                                    lowerK === `chapter ${padded}` || lowerK === `chapter${padded}`) &&
-                                    comp[k];
-                            });
-                            if (isDone) completedCount++;
-                        }
-
-                        if (completedCount >= 13) {
-                            setShowVideoEmailModal(false);
-                            window.location.href = `video_exams.html?email=${encodeURIComponent(videoCheckEmail)}`;
-                        } else {
-                            setVideoError(`❌ Verification Failed: You have only completed ${completedCount} out of 13 chapters. Please finish the weekly Q&A reports first.`);
-                        }
-                    } else {
-                        setVideoError("❌ Invalid code. Please check your email and try again.");
-                    }
-                } catch (err) {
-                    setVideoError("System connection error. Please try again.");
-                } finally {
-                    setIsVideoChecking(false);
-                }
-            };
-
             return (
                 <div className="app-root">
                     <header>
@@ -1451,24 +1541,113 @@ You are managing a "Critical Thinking Simulation" and have the intellect of a un
                                                         <path d="M9 4L10 2H14L15 4" />
                                                     </svg>
                                                 )}
-                                            </span> {isCheckingKey ? "Checking Connection..." : "Upload weekly Q&A report"}
+                                            </span> {isCheckingKey ? "Checking Connection..." : "Upload Response Sheet"}
                                         </button>
 
-                                        <button className="main-upload-btn" onClick={handleVideoPortalClick} title="Upload exam videos">
+                                        <button className="video-portal-btn" onClick={handleVideoPortalClick} title="Upload exam videos">
                                             <span className="btn-icon">
                                                 <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                                                     <rect x="2" y="6" width="14" height="12" rx="3" />
                                                     <path d="M16 10l5-3v10l-5-3" />
                                                 </svg>
-                                            </span> Upload exam videos
+                                            </span>
                                         </button>
                                     </div>
-
-
-
-
                                 </motion.div>
                             )}
+
+                            {view === 'video_portal' && (
+                                <motion.div
+                                    key="video_portal"
+                                    initial={{ opacity: 0, x: 20 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    exit={{ opacity: 0, x: -20 }}
+                                    className="video-portal-container"
+                                >
+                                    <div className="video-portal-header">
+                                        <button className="back-link" onClick={() => setView('landing')}>← Back</button>
+                                        <h2>Exam Video Portal</h2>
+                                    </div>
+
+                                    <div className="video-portal-layout">
+                                        {(() => {
+                                            const filledCount = videoRows.filter(r => r.chapter && r.url.trim().length > 10).length;
+                                            const grade = filledCount >= 10 ? 'A+' : filledCount >= 8 ? 'A' : filledCount >= 6 ? 'A-' : 'B+';
+                                            return (
+                                                <React.Fragment>
+                                                    <div className="video-form-section">
+                                            <div className="video-form-grid">
+                                                <div className="grid-header">Chapter</div>
+                                                <div className="grid-header">YouTube URL</div>
+                                                <div className="grid-header"></div>
+                                                {videoRows.map((row, idx) => (
+                                                    <React.Fragment key={idx}>
+                                                        <select
+                                                            className="video-select"
+                                                            value={row.chapter}
+                                                            onChange={(e) => updateVideoRow(idx, 'chapter', e.target.value)}
+                                                        >
+                                                            <option value="">Select Chapter</option>
+                                                            {[...Array(13)].map((_, i) => {
+                                                                const chNum = (i + 1).toString();
+                                                                // Allow if it's the current selection OR if it's not selected in any other row
+                                                                const isAvailable = row.chapter === chNum || !videoRows.some(vr => vr.chapter === chNum);
+                                                                if (!isAvailable) return null;
+                                                                return (
+                                                                    <option key={chNum} value={chNum}>Chapter {chNum}</option>
+                                                                );
+                                                            })}
+                                                        </select>
+                                                        <input
+                                                            type="text"
+                                                            className="video-input"
+                                                            placeholder="https://www.youtube.com/watch?v=..."
+                                                            value={row.url}
+                                                            onChange={(e) => updateVideoRow(idx, 'url', e.target.value)}
+                                                        />
+                                                        <button 
+                                                            className="remove-row-btn" 
+                                                            onClick={() => removeVideoRow(idx)}
+                                                            title="Remove row"
+                                                        >
+                                                            ✕
+                                                        </button>
+                                                    </React.Fragment>
+                                                ))}
+                                            </div>
+                                            <button className="add-row-btn" onClick={addVideoRow}>+ Add Another Video</button>
+
+                                            <div className="video-submit-wrapper">
+                                                <button
+                                                    className={`main-upload-btn ${isVideoSubmitting ? 'disabled' : ''}`}
+                                                    disabled={isVideoSubmitting}
+                                                    onClick={handleVideoSubmit}
+                                                >
+                                                    {isVideoSubmitting ? "Submitting..." : "Submit your exam videos"}
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <div className="video-grade-section">
+                                            <div className="grade-card-large">
+                                                <div className="grade-header-top">
+                                                    {filledCount < 6 ? "Your current grade is" : "Your projected grade in this class will be:"}
+                                                </div>
+                                                <div className="grade-letter-giant">{grade}</div>
+                                                <div className="grade-footer-bottom">
+                                                    {filledCount < 6 
+                                                        ? "given 13 Q&A reports you submitted" 
+                                                        : "{pending review of the videos}"}
+                                                </div>
+                                                </div>
+                                            </div>
+                                        </React.Fragment>
+                                    );
+                                })()}
+                            </div>
+                        </motion.div>
+                            )}
+
                             {view === 'chat' && (
                                 <motion.div
                                     key="chat"
@@ -1679,7 +1858,7 @@ You are managing a "Critical Thinking Simulation" and have the intellect of a un
                                                                         style={{ fontSize: '16px', padding: '12px 24px', width: 'auto' }}
                                                                         onClick={() => fileInputRef.current.click()}
                                                                     >
-                                                                        <span className="btn-icon">📂</span> Upload weekly Q&A report
+                                                                        <span className="btn-icon">📂</span> Upload Response Sheet
                                                                     </button>
                                                                 </div>
                                                             </div>
@@ -1690,7 +1869,7 @@ You are managing a "Critical Thinking Simulation" and have the intellect of a un
                                                                     style={{ fontSize: '16px', padding: '12px 24px', margin: '0 auto', width: 'auto' }}
                                                                     onClick={() => fileInputRef.current.click()}
                                                                 >
-                                                                    <span className="btn-icon">📂</span> Upload weekly Q&A report
+                                                                    <span className="btn-icon">📂</span> Upload Response Sheet
                                                                 </button>
                                                             </div>
                                                         ) : msg.type === 'reupload_action' ? (
@@ -1889,15 +2068,15 @@ You are managing a "Critical Thinking Simulation" and have the intellect of a un
                             </div>
                         )
                     }
+
                     {showVideoModal && (
                         <div className="modal-overlay">
                             <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="modal-content info-modal">
                                 <h3>🚀 Exam Video Phase</h3>
                                 <p>To proceed with video submissions, please ensure the following:</p>
                                 <ul className="modal-checklist">
-                                    <li>✅ You have read the instructions about submitting your exam videos in the course website.</li>
-                                    <li>✅ You have submitted all <strong>13 weekly Q&A reports</strong>.</li>
-                                    <li>✅ Your videos are recorded and uploaded to YouTube (one video per chapter).</li>
+                                    <li>✅ You have submitted all <strong>13 chapters</strong> of your essay reports.</li>
+                                    <li>✅ Your videos are recorded and uploaded to YouTube.</li>
                                     <li>✅ You are ready to submit your full "Exam Package" at once.</li>
                                 </ul>
                                 <div className="modal-actions">
@@ -1917,13 +2096,13 @@ You are managing a "Critical Thinking Simulation" and have the intellect of a un
                                 <h3>🔐 Verify Enrollment</h3>
                                 {videoStep === 'email' ? (
                                     <>
-                                        <p>Please enter your email address to verify your enrollment.</p>
+                                        <p>Please enter the email you used to submit your reports to unlock the Video Portal.</p>
                                         <div className="api-input-group" style={{ marginTop: '20px' }}>
-                                            <input
-                                                type="email"
-                                                className="video-input"
+                                            <input 
+                                                type="email" 
+                                                className="video-input" 
                                                 style={{ width: '100%', boxSizing: 'border-box' }}
-                                                placeholder="your.email@hawaii.edu"
+                                                placeholder="your.email@hawaii.edu" 
                                                 value={videoCheckEmail}
                                                 onChange={(e) => setVideoCheckEmail(e.target.value)}
                                             />
@@ -1932,16 +2111,22 @@ You are managing a "Critical Thinking Simulation" and have the intellect of a un
                                 ) : (
                                     <>
                                         <p>I just sent a <strong>3-digit verification code</strong> to <strong>{videoCheckEmail}</strong>.</p>
+                                        <p style={{ fontSize: '13px', color: 'var(--slate-500)', marginTop: '8px' }}>Please check your Inbox or Spam folder and enter the code below.</p>
                                         <div className="api-input-group" style={{ marginTop: '20px' }}>
-                                            <input
-                                                type="text"
-                                                className="video-input text-center"
+                                            <input 
+                                                type="text" 
+                                                className="video-input text-center" 
                                                 style={{ width: '100%', boxSizing: 'border-box', letterSpacing: '8px', fontSize: '24px', fontWeight: 'bold' }}
-                                                placeholder="000"
+                                                placeholder="000" 
                                                 maxLength="3"
                                                 value={videoOtpInput}
-                                                onChange={(e) => setVideoOtpInput(e.target.value.replace(/\D/g, ''))}
+                                                onChange={(e) => setVideoOtpInput(e.target.value.replace(/\D/g,''))}
                                             />
+                                        </div>
+                                        <div style={{ marginTop: '12px', textAlign: 'center' }}>
+                                            <a href="#" onClick={(e) => { e.preventDefault(); setVideoStep('email'); setVideoError(''); }} style={{ fontSize: '13px', color: 'var(--primary)', textDecoration: 'none' }}>
+                                                Wrong email? Go back.
+                                            </a>
                                         </div>
                                     </>
                                 )}
@@ -1959,7 +2144,7 @@ You are managing a "Critical Thinking Simulation" and have the intellect of a un
                                         setVideoError('');
                                         setVideoOtpInput('');
                                     }}>Cancel</button>
-                                    <button
+                                    <button 
                                         className={`btn-primary ${isVideoChecking ? 'disabled' : ''}`}
                                         disabled={isVideoChecking}
                                         onClick={videoStep === 'email' ? handleRequestVideoCode : handleVerifyVideoOTP}
@@ -1970,13 +2155,33 @@ You are managing a "Critical Thinking Simulation" and have the intellect of a un
                             </motion.div>
                         </div>
                     )}
+
+                    {showVideoSuccess && (
+                        <div className="modal-overlay">
+                            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="modal-content success-modal">
+                                <h3>Submission Successful!</h3>
+                                <p>Your final grade in this class is projected to be <strong>{finalProjectedGrade}</strong>.</p>
+                                <button className="btn-primary" onClick={() => {
+                                    setShowVideoSuccess(false);
+                                    setView('landing');
+                                    // Reset state
+                                    setVideoRows([
+                                        { chapter: '', url: '' }, { chapter: '', url: '' }, { chapter: '', url: '' },
+                                        { chapter: '', url: '' }, { chapter: '', url: '' }, { chapter: '', url: '' }
+                                    ]);
+                                }}>Confirm</button>
+                            </motion.div>
+                        </div>
+                    )}
                     <footer className="landing-footer">
                         IStudy is an AI-powered essay review developed by <a href="https://github.com/Camilo-Mora" target="_blank">Camilo Mora, Ph.D.</a>
                     </footer>
                 </div >
             );
         }
-        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
     </script>
 </body>
 

@@ -142,16 +142,16 @@ header {
     display: flex;
     align-items: center;
     gap: clamp(12px, 2vw, 16px);
-    padding: clamp(16px, 2.5vh, 20px) clamp(32px, 5vw, 48px);
-    background: #dbe2eb;
+    padding: 16px 48px;
+    background: #eef2f7;
     color: #334155;
-    border-radius: 9999px;
+    border-radius: 50px;
     font-size: clamp(16px, 2.5vw, 20px);
     font-weight: 500;
     border: none;
     cursor: pointer;
     transition: all 0.2s ease;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
     margin-top: 0;
     position: relative;
     z-index: 10;
@@ -1068,9 +1068,274 @@ header {
         opacity: 0;
         transform: translateY(10px);
     }
-
     to {
         opacity: 1;
         transform: translateY(0);
+    }
+}
+
+/* Version 1.7 - Exam Video Portal */
+.landing-btn-group {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-top: 20px;
+    position: relative;
+    z-index: 10;
+}
+
+.video-portal-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 90px;
+    height: 60px;
+    background: #eef2f7;
+    color: #334155;
+    border-radius: 50px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+}
+
+.video-portal-btn:hover {
+    background: #e2e8f0;
+    transform: scale(1.02);
+}
+
+.video-portal-container {
+    width: 100%;
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 20px;
+    animation: fadeIn 0.5s ease;
+}
+
+.video-portal-header {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.video-portal-header h2 {
+    font-size: 28px;
+    color: var(--slate-900);
+    margin: 0;
+}
+
+.back-link {
+    background: none;
+    border: none;
+    color: var(--primary);
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.video-portal-layout {
+    display: grid;
+    grid-template-columns: 1fr 400px;
+    gap: 40px;
+    align-items: start;
+}
+
+.video-form-section {
+    background: white;
+    padding: 0px;
+}
+
+.video-form-grid {
+    display: grid;
+    grid-template-columns: 180px 1fr 40px;
+    gap: 12px;
+    margin-bottom: 24px;
+    align-items: center;
+}
+
+.remove-row-btn {
+    background: none;
+    border: none;
+    color: #ef4444;
+    font-size: 18px;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 40px;
+    width: 40px;
+    border-radius: 50%;
+    transition: all 0.2s;
+}
+
+.remove-row-btn:hover {
+    background: #fef2f2;
+    transform: scale(1.1);
+}
+
+.grid-header {
+    font-weight: 700;
+    font-size: 14px;
+    color: var(--slate-500);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding-bottom: 8px;
+}
+
+.video-select {
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid var(--slate-200);
+    background: white;
+    font-size: 14px;
+    color: var(--slate-700);
+    outline: none;
+}
+
+.video-input {
+    padding: 12px 16px;
+    border-radius: 8px;
+    border: 1px solid var(--slate-200);
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.video-input:focus {
+    border-color: var(--primary);
+}
+
+.add-row-btn {
+    background: none;
+    border: 1px dashed var(--slate-300);
+    color: var(--slate-500);
+    padding: 12px;
+    width: 100%;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    margin-bottom: 30px;
+    transition: all 0.2s;
+}
+
+.add-row-btn:hover {
+    background: var(--slate-50);
+    border-color: var(--slate-400);
+    color: var(--slate-700);
+}
+
+.video-grade-section {
+    position: sticky;
+    top: 40px;
+}
+
+.grade-card-large {
+    background: #f8fafc;
+    border-radius: 40px;
+    padding: 60px 40px;
+    text-align: center;
+    border: 2px solid #eef2f7;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.02);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.grade-header-top {
+    font-size: 24px;
+    font-weight: 800;
+    color: #000;
+    margin-bottom: 10px;
+}
+
+.grade-letter-giant {
+    font-size: 140px;
+    font-weight: 800;
+    color: #94abbd; /* Desaturated blue-gray matching image */
+    line-height: 1;
+    margin: 10px 0;
+    letter-spacing: -4px;
+}
+
+.grade-footer-bottom {
+    font-size: 22px;
+    font-weight: 800;
+    color: #000;
+    margin-top: 10px;
+}
+
+.video-submit-wrapper {
+    margin-top: 40px;
+}
+
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(15, 23, 42, 0.6);
+    backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+    padding: 20px;
+}
+
+.modal-content {
+    background: white;
+    border-radius: 24px;
+    padding: 40px;
+    width: 100%;
+    max-width: 500px;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+}
+
+.info-modal h3 {
+    font-size: 24px;
+    margin-bottom: 16px;
+    color: var(--slate-900);
+}
+
+.modal-checklist {
+    list-style: none;
+    padding: 0;
+    margin: 24px 0;
+}
+
+.modal-checklist li {
+    margin-bottom: 12px;
+    font-size: 15px;
+    color: var(--slate-600);
+    display: flex;
+    gap: 10px;
+}
+
+.success-modal {
+    text-align: center;
+}
+
+.success-modal h3 {
+    font-size: 24px;
+    margin-bottom: 12px;
+}
+
+.btn-primary.disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    background: var(--slate-400);
+}
+
+@media (max-width: 768px) {
+    .video-portal-layout {
+        grid-template-columns: 1fr;
+    }
+    .video-grade-section {
+        position: static;
+        order: -1;
     }
 }

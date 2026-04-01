@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>iStudy 1.7 - Student Essay Review System</title>
+    <title>iStudy 1.6 - Student Essay Review System</title>
     <link rel="stylesheet" href="styles.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -417,15 +417,6 @@
             const [isSubmitting, setIsSubmitting] = useState(false);
             const [isWaitingForBriefing, setIsWaitingForBriefing] = useState(false);
 
-            // Video Portal Verification States
-            const [showVideoModal, setShowVideoModal] = useState(false);
-            const [showVideoEmailModal, setShowVideoEmailModal] = useState(false);
-            const [videoCheckEmail, setVideoCheckEmail] = useState('');
-            const [isVideoChecking, setIsVideoChecking] = useState(false);
-            const [videoStep, setVideoStep] = useState('email'); // 'email' or 'otp'
-            const [videoOtpInput, setVideoOtpInput] = useState('');
-            const [videoError, setVideoError] = useState('');
-
             // SCROLL CONTROL: Force "overflow: hidden" on Landing Page
             useEffect(() => {
                 if (view === 'landing') {
@@ -543,7 +534,6 @@
                     } else {
                         setView('chat');
                         // Version 1.5: Added starting disclaimer about mission and time requirements
-                        // Version 1.7: Updated version number and reflected decoupling of portals.
                         addMessage('system', null, 'mission_briefing');
                         setIsWaitingForBriefing(true);
                     }
@@ -1263,7 +1253,7 @@ You are managing a "Critical Thinking Simulation" and have the intellect of a un
 
                         let instructions = "You are all set.";
                         if (view === 'landing') {
-                            instructions = "Please click the **'Upload weekly Q&A report'** button to begin.";
+                            instructions = "Please click the **'Upload Response Sheet'** button to begin.";
                         } else if (view === 'chat') {
                             if (!submission.student_email) {
                                 instructions = "Please **enter your student email** below to verify your enrollment.";
@@ -1346,76 +1336,10 @@ You are managing a "Critical Thinking Simulation" and have the intellect of a un
                 return () => clearTimeout(timer);
             }, [messages, view]);
 
-            const handleVideoPortalClick = () => {
-                setShowVideoModal(true);
-            };
-
-            const handleRequestVideoCode = async () => {
-                if (!videoCheckEmail || !videoCheckEmail.includes('@')) {
-                    setVideoError("Please enter a valid student email.");
-                    return;
-                }
-                setVideoError('');
-                setIsVideoChecking(true);
-                try {
-                    const res = await window.Core.VerifyStudentEmail(videoCheckEmail);
-                    if (res.status === 'success') {
-                        setVideoStep('otp');
-                    } else {
-                        setVideoError(res.message || "❌ Email not found in the class roster.");
-                    }
-                } catch (err) {
-                    setVideoError("System connection error. Please try again.");
-                } finally {
-                    setIsVideoChecking(false);
-                }
-            };
-
-            const handleVerifyVideoOTP = async () => {
-                if (!videoOtpInput || videoOtpInput.length < 3) {
-                    setVideoError("Please enter the 3-digit code.");
-                    return;
-                }
-                setVideoError('');
-                setIsVideoChecking(true);
-                try {
-                    const res = await window.Core.VerifyOTP(videoCheckEmail, videoOtpInput);
-                    if (res.status === 'success') {
-                        const comp = res.completion;
-                        let completedCount = 0;
-                        const compKeys = Object.keys(comp);
-                        for (let i = 1; i <= 13; i++) {
-                            const num = i;
-                            const padded = i.toString().padStart(2, '0');
-                            const isDone = compKeys.some(k => {
-                                const lowerK = k.toLowerCase();
-                                return (lowerK === `chapter ${num}` || lowerK === `chapter${num}` ||
-                                    lowerK === `chapter ${padded}` || lowerK === `chapter${padded}`) &&
-                                    comp[k];
-                            });
-                            if (isDone) completedCount++;
-                        }
-
-                        if (completedCount >= 13) {
-                            setShowVideoEmailModal(false);
-                            window.location.href = `video_exams.html?email=${encodeURIComponent(videoCheckEmail)}`;
-                        } else {
-                            setVideoError(`❌ Verification Failed: You have only completed ${completedCount} out of 13 chapters. Please finish the weekly Q&A reports first.`);
-                        }
-                    } else {
-                        setVideoError("❌ Invalid code. Please check your email and try again.");
-                    }
-                } catch (err) {
-                    setVideoError("System connection error. Please try again.");
-                } finally {
-                    setIsVideoChecking(false);
-                }
-            };
-
             return (
                 <div className="app-root">
                     <header>
-                        <div className="logo">IStudy <span style={{ fontSize: '0.5em', opacity: 0.6, verticalAlign: 'middle', fontWeight: 'normal' }}>1.7</span></div>
+                        <div className="logo">IStudy <span style={{ fontSize: '0.5em', opacity: 0.6, verticalAlign: 'middle', fontWeight: 'normal' }}>1.6</span></div>
                         <div className="settings-icon" onClick={() => setShowSettings(true)}>
                             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                 <circle cx="12" cy="12" r="3"></circle>
@@ -1439,30 +1363,18 @@ You are managing a "Critical Thinking Simulation" and have the intellect of a un
                                         </video>
                                     </div>
 
-                                    <div className="landing-btn-group">
-                                        <button className={`main-upload-btn ${isCheckingKey ? 'disabled' : ''}`} onClick={handleUploadClick} disabled={isCheckingKey}>
-                                            <span className="btn-icon">
-                                                {isCheckingKey ? (
-                                                    <div className="spinner"></div>
-                                                ) : (
-                                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                                        <rect x="3" y="4" width="18" height="15" rx="4" />
-                                                        <circle cx="12" cy="11.5" r="3" />
-                                                        <path d="M9 4L10 2H14L15 4" />
-                                                    </svg>
-                                                )}
-                                            </span> {isCheckingKey ? "Checking Connection..." : "Upload weekly Q&A report"}
-                                        </button>
-
-                                        <button className="main-upload-btn" onClick={handleVideoPortalClick} title="Upload exam videos">
-                                            <span className="btn-icon">
-                                                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                                    <rect x="2" y="6" width="14" height="12" rx="3" />
-                                                    <path d="M16 10l5-3v10l-5-3" />
+                                    <button className={`main-upload-btn ${isCheckingKey ? 'disabled' : ''}`} onClick={handleUploadClick} disabled={isCheckingKey}>
+                                        <span className="btn-icon">
+                                            {isCheckingKey ? (
+                                                <div className="spinner"></div>
+                                            ) : (
+                                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+                                                    <circle cx="12" cy="13" r="4"></circle>
                                                 </svg>
-                                            </span> Upload exam videos
-                                        </button>
-                                    </div>
+                                            )}
+                                        </span> {isCheckingKey ? "Checking Connection..." : "Upload Response Sheet"}
+                                    </button>
 
 
 
@@ -1679,7 +1591,7 @@ You are managing a "Critical Thinking Simulation" and have the intellect of a un
                                                                         style={{ fontSize: '16px', padding: '12px 24px', width: 'auto' }}
                                                                         onClick={() => fileInputRef.current.click()}
                                                                     >
-                                                                        <span className="btn-icon">📂</span> Upload weekly Q&A report
+                                                                        <span className="btn-icon">📂</span> Upload Response Sheet
                                                                     </button>
                                                                 </div>
                                                             </div>
@@ -1690,7 +1602,7 @@ You are managing a "Critical Thinking Simulation" and have the intellect of a un
                                                                     style={{ fontSize: '16px', padding: '12px 24px', margin: '0 auto', width: 'auto' }}
                                                                     onClick={() => fileInputRef.current.click()}
                                                                 >
-                                                                    <span className="btn-icon">📂</span> Upload weekly Q&A report
+                                                                    <span className="btn-icon">📂</span> Upload Response Sheet
                                                                 </button>
                                                             </div>
                                                         ) : msg.type === 'reupload_action' ? (
@@ -1889,87 +1801,6 @@ You are managing a "Critical Thinking Simulation" and have the intellect of a un
                             </div>
                         )
                     }
-                    {showVideoModal && (
-                        <div className="modal-overlay">
-                            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="modal-content info-modal">
-                                <h3>🚀 Exam Video Phase</h3>
-                                <p>To proceed with video submissions, please ensure the following:</p>
-                                <ul className="modal-checklist">
-                                    <li>✅ You have read the instructions about submitting your exam videos in the course website.</li>
-                                    <li>✅ You have submitted all <strong>13 weekly Q&A reports</strong>.</li>
-                                    <li>✅ Your videos are recorded and uploaded to YouTube (one video per chapter).</li>
-                                    <li>✅ You are ready to submit your full "Exam Package" at once.</li>
-                                </ul>
-                                <div className="modal-actions">
-                                    <button className="btn-secondary" onClick={() => setShowVideoModal(false)}>Cancel</button>
-                                    <button className="btn-primary" onClick={() => {
-                                        setShowVideoModal(false);
-                                        setShowVideoEmailModal(true);
-                                    }}>Proceed</button>
-                                </div>
-                            </motion.div>
-                        </div>
-                    )}
-
-                    {showVideoEmailModal && (
-                        <div className="modal-overlay">
-                            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="modal-content info-modal">
-                                <h3>🔐 Verify Enrollment</h3>
-                                {videoStep === 'email' ? (
-                                    <>
-                                        <p>Please enter your email address to verify your enrollment.</p>
-                                        <div className="api-input-group" style={{ marginTop: '20px' }}>
-                                            <input
-                                                type="email"
-                                                className="video-input"
-                                                style={{ width: '100%', boxSizing: 'border-box' }}
-                                                placeholder="your.email@hawaii.edu"
-                                                value={videoCheckEmail}
-                                                onChange={(e) => setVideoCheckEmail(e.target.value)}
-                                            />
-                                        </div>
-                                    </>
-                                ) : (
-                                    <>
-                                        <p>I just sent a <strong>3-digit verification code</strong> to <strong>{videoCheckEmail}</strong>.</p>
-                                        <div className="api-input-group" style={{ marginTop: '20px' }}>
-                                            <input
-                                                type="text"
-                                                className="video-input text-center"
-                                                style={{ width: '100%', boxSizing: 'border-box', letterSpacing: '8px', fontSize: '24px', fontWeight: 'bold' }}
-                                                placeholder="000"
-                                                maxLength="3"
-                                                value={videoOtpInput}
-                                                onChange={(e) => setVideoOtpInput(e.target.value.replace(/\D/g, ''))}
-                                            />
-                                        </div>
-                                    </>
-                                )}
-
-                                {videoError && (
-                                    <div style={{ marginTop: '15px', padding: '10px', borderRadius: '8px', background: '#fee2e2', color: '#b91c1c', fontSize: '13px', border: '1px solid #fecaca' }}>
-                                        {videoError}
-                                    </div>
-                                )}
-
-                                <div className="modal-actions" style={{ marginTop: '30px' }}>
-                                    <button className="btn-secondary" onClick={() => {
-                                        setShowVideoEmailModal(false);
-                                        setVideoStep('email');
-                                        setVideoError('');
-                                        setVideoOtpInput('');
-                                    }}>Cancel</button>
-                                    <button
-                                        className={`btn-primary ${isVideoChecking ? 'disabled' : ''}`}
-                                        disabled={isVideoChecking}
-                                        onClick={videoStep === 'email' ? handleRequestVideoCode : handleVerifyVideoOTP}
-                                    >
-                                        {isVideoChecking ? "Processing..." : (videoStep === 'email' ? "Get Recovery Code" : "Verify & Unlock")}
-                                    </button>
-                                </div>
-                            </motion.div>
-                        </div>
-                    )}
                     <footer className="landing-footer">
                         IStudy is an AI-powered essay review developed by <a href="https://github.com/Camilo-Mora" target="_blank">Camilo Mora, Ph.D.</a>
                     </footer>
