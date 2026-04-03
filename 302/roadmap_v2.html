@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Academic Roadmap 2.0 Sandbox</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/framer-motion@10.16.4/dist/framer-motion.js"></script>
+    <style>
+        :root {
+            --navy-deep: #0f172a;
+            --slate-light: #f1f5f9;
+            --slate-gray: #64748b;
+            --label-gray: #94a3b8;
+            --label-dark: #1e293b;
+        }
+
+        body {
+            background-color: #f8fafc;
+            font-family: 'Inter', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+
+        .roadmap-card {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+            max-width: 950px;
+            width: 100%;
+        }
+
+        .roadmap-title {
+            font-family: 'Outfit', sans-serif;
+            font-size: 32px;
+            font-weight: 800;
+            margin-bottom: 40px;
+            color: #000;
+        }
+
+        .section-header {
+            font-family: 'Outfit', sans-serif;
+            font-size: 14px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 3px solid #000;
+            padding-bottom: 5px;
+            margin-bottom: 25px;
+            display: inline-block;
+            width: 100%;
+        }
+
+        .roadmap-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .label-column {
+            width: 230px;
+            flex-shrink: 0;
+            line-height: 1.1;
+            padding-right: 20px;
+            text-align: right;
+        }
+
+        .label-small {
+            font-size: 14px;
+            color: var(--label-gray);
+            font-weight: 500;
+        }
+
+        .label-large {
+            font-size: 18px;
+            color: var(--label-dark);
+            font-weight: 800;
+            display: block;
+            margin-top: 2px;
+        }
+
+        .items-grid {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        /* Chapter Boxes (Tall Rectangles) */
+        .ch-box {
+            width: 44px;
+            height: 65px;
+            background-color: var(--slate-light);
+            border-radius: 10px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--slate-gray);
+            transition: all 0.3s ease;
+            position: relative; /* For the tickmark */
+        }
+
+        .tickmark {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            width: 12px;
+            height: 12px;
+            background-color: #3b82f6; /* Vibrant Blue for the circle */
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 7px;
+            color: white;
+            font-weight: 900;
+        }
+
+        /* Grade Circles */
+        .gr-circle {
+            width: 44px;
+            height: 44px;
+            background-color: var(--slate-light);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 14px;
+            font-weight: 800;
+            color: var(--slate-gray);
+            transition: all 0.3s ease;
+        }
+
+        .roadmap-subtitle {
+            display: flex;
+            align-items: center;
+            margin-top: -35px;
+            margin-bottom: 30px;
+            font-size: 13px;
+            color: var(--slate-gray);
+            font-weight: 500;
+        }
+
+        .legend-badge {
+            width: 14px;
+            height: 14px;
+            background-color: #3b82f6;
+            border-radius: 50%;
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 8px;
+            color: white;
+            font-weight: 900;
+            margin: 0 6px;
+        }
+
+        /* Mission Accomplished State */
+        .completed {
+            background-color: var(--navy-deep) !important;
+            color: white !important;
+        }
+
+        .spacer {
+            height: 50px;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState } = React;
+
+        const RoadmapV2 = () => {
+            // Sample Data: Chapters 1-5 completed
+            const roadmapData = {
+                'chapter 01': true,
+                'chapter 02': true,
+                'chapter 03': true,
+                'chapter 04': true,
+                'chapter 05': true
+            };
+
+            const chGrades = {
+                1: 'F', 2: 'F', 3: 'F', 4: 'F', 5: 'D-',
+                6: 'D', 7: 'D+', 8: 'C-', 9: 'C', 10: 'C+',
+                11: 'B-', 12: 'B', 13: 'B+'
+            };
+
+            const vGrades = {
+                6: 'A-', 8: 'A', 10: 'A+'
+            };
+
+            const isDone = (num, type = 'chapter') => {
+                const padded = num.toString().padStart(2, '0');
+                return roadmapData[`${type} ${padded}`];
+            };
+
+            return (
+                <div className="roadmap-card">
+                    <div className="roadmap-title">Academic Roadmap</div>
+                    <div className="roadmap-subtitle">
+                        This <span className="legend-badge">✓</span> indicates your completion so far.
+                    </div>
+
+                    {/* CHAPTERS SECTION */}
+                    <div className="section-header">Weekly Q&A reports</div>
+                    
+                    {/* Row 1: Action */}
+                    <div className="roadmap-row">
+                        <div className="label-column">
+                            <span className="label-small">If you submit this number of</span>
+                            <span className="label-large">chapters &rarr;</span>
+                        </div>
+                        <div className="items-grid">
+                            {[1,2,3,4,5,6,7,8,9,10,11,12,13].map(num => (
+                                <div key={num} className={`ch-box ${isDone(num) ? 'completed' : ''}`}>
+                                    {num}
+                                    {isDone(num) && <span className="tickmark">✓</span>}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Row 2: Reward */}
+                    <div className="roadmap-row">
+                        <div className="label-column">
+                            <span className="label-small">your</span>
+                            <span className="label-large">grade is &rarr;</span>
+                        </div>
+                        <div className="items-grid">
+                            {[1,2,3,4,5,6,7,8,9,10,11,12,13].map(num => (
+                                <div key={num} className={`gr-circle ${isDone(num) ? 'completed' : ''}`}>
+                                    {chGrades[num]}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="spacer"></div>
+
+                    {/* VIDEOS SECTION */}
+                    <div className="section-header">Final Video Exams</div>
+
+                    <div className="roadmap-row">
+                        <div className="label-column">
+                            <span className="label-small">If you submit this number of</span>
+                            <span className="label-large">videos &rarr;</span>
+                        </div>
+                        <div className="items-grid">
+                            {[6, 8, 10].map(num => (
+                                <div key={num} className={`ch-box ${isDone(num, 'video') ? 'completed' : ''}`}>
+                                    {num}
+                                    {isDone(num, 'video') && <span className="tickmark">✓</span>}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="roadmap-row">
+                        <div className="label-column">
+                            <span className="label-small">your</span>
+                            <span className="label-large">grade is &rarr;</span>
+                        </div>
+                        <div className="items-grid">
+                            {[6, 8, 10].map(num => (
+                                <div key={num} className={`gr-circle ${isDone(num, 'video') ? 'completed' : ''}`}>
+                                    {vGrades[num]}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<RoadmapV2 />);
+    </script>
+</body>
+</html>

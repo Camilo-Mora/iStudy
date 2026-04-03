@@ -40,9 +40,9 @@ header {
     justify-content: space-between;
     align-items: center;
     padding: 24px 48px;
-    background: #ffffff;
+    background: transparent; /* Made transparent to allow smoke to show */
     position: relative;
-    z-index: 50;
+    z-index: 100; /* High z-index but transparent background */
 }
 
 .logo {
@@ -107,14 +107,12 @@ header {
 .title-image-wrapper {
     position: relative;
     z-index: 1;
-    width: 90%;
-    max-width: 800px;
-    max-height: 60vh;
-    margin-bottom: clamp(-40px, -5vh, -60px);
-    overflow: hidden;
-    /* HARD CROP */
-    border-radius: 2px;
-    /* Slight radius helps masking */
+    width: 100%;
+    max-width: 900px;
+    margin-bottom: clamp(-50px, -6vh, -80px);
+    /* Grow upwards and sidewides from the bottom without clipping */
+    transform: scale(1.45);
+    transform-origin: bottom center;
 }
 
 .title-image {
@@ -182,6 +180,7 @@ header {
     font-size: 11px;
     z-index: 100;
     pointer-events: auto;
+    font-style: italic; /* Applying the requested italic style */
 }
 
 .landing-footer a {
@@ -273,28 +272,28 @@ header {
 }
 
 .avatar-newton {
-    background-image: url('assets/avatar_newton.png');
+    background-image: url('../assets/avatar_newton.png');
     background-size: cover;
     background-position: center;
     border: 1.5px solid #bae6fd;
 }
 
 .avatar-tontin {
-    background-image: url('assets/avatar_tontin.png');
+    background-image: url('../assets/avatar_tontin.png');
     background-size: cover;
     background-position: center;
     border: 1.5px solid #fde68a;
 }
 
 .avatar-joker {
-    background-image: url('assets/avatar_joker.png');
+    background-image: url('../assets/avatar_joker.png');
     background-size: cover;
     background-position: center;
     border: 1.5px solid #fecdd3;
 }
 
 .avatar-system {
-    background-image: url('assets/avatar_system.png');
+    background-image: url('../assets/avatar_system.png');
     background-size: cover;
     background-position: center;
     border: 1.5px solid #e2e8f0;

@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>iStudy - Model Discovery Test Bench</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Outfit:wght@500;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #3b82f6;
+            --bg: #f8fafc;
+            --card: #ffffff;
+            --text: #1e293b;
+            --success: #10b981;
+            --warning: #f59e0b;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 40px 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .container {
+            max-width: 800px;
+            width: 100%;
+        }
+
+        h1 {
+            font-family: 'Outfit', sans-serif;
+            font-weight: 800;
+            font-size: 2rem;
+            margin-bottom: 8px;
+            text-align: center;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #64748b;
+            margin-bottom: 30px;
+        }
+
+        .config-card {
+            background: var(--card);
+            padding: 24px;
+            border-radius: 16px;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+            margin-bottom: 24px;
+        }
+
+        .input-group {
+            margin-bottom: 16px;
+        }
+
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 8px;
+            font-size: 0.9rem;
+        }
+
+        input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            font-family: inherit;
+            box-sizing: border-box;
+            transition: all 0.2s;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        button {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            transition: opacity 0.2s;
+        }
+
+        button:hover {
+            opacity: 0.9;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 16px;
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .stat-val {
+            display: block;
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--primary);
+        }
+
+        .stat-label {
+            font-size: 0.75rem;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .results-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .list-container {
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .list-header {
+            padding: 12px 16px;
+            background: #f1f5f9;
+            font-weight: 700;
+            font-size: 0.85rem;
+            color: #475569;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .model-item {
+            padding: 10px 16px;
+            border-bottom: 1px solid #f1f5f9;
+            font-size: 0.85rem;
+            display: grid;
+            grid-template-columns: 30px 1fr 60px 100px;
+            align-items: center;
+        }
+
+        .model-item:last-child {
+            border-bottom: none;
+        }
+
+        .rank-badge {
+            font-weight: 700;
+            color: var(--primary);
+        }
+
+        .tag {
+            font-size: 0.65rem;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 600;
+            text-align: center;
+        }
+
+        .tag-pro { background: #fee2e2; color: #991b1b; }
+        .tag-flash { background: #dcfce7; color: #166534; }
+        .tag-other { background: #f1f5f9; color: #475569; }
+
+        .status-badge {
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-align: right;
+        }
+
+        .status-active { color: var(--success); }
+        .status-restricted { color: #ef4444; }
+        .status-pending { color: #94a3b8; font-style: italic; }
+
+        #error-msg {
+            color: #ef4444;
+            text-align: center;
+            margin-top: 10px;
+            font-size: 0.85rem;
+            display: none;
+        }
+
+        .discovery-header {
+            display: grid;
+            grid-template-columns: 30px 1fr 60px 100px;
+            padding: 12px 16px;
+            background: #f1f5f9;
+            font-weight: 700;
+            font-size: 0.75rem;
+            color: #475569;
+            border-bottom: 1px solid #e2e8f0;
+            text-transform: uppercase;
+        }
+
+        .final-chain-card {
+            background: #0f172a;
+            color: white;
+            padding: 24px;
+            border-radius: 16px;
+            margin-top: 30px;
+            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);
+            display: none;
+        }
+
+        .final-chain-header {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.25rem;
+            font-weight: 800;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            color: #38bdf8;
+        }
+
+        .chain-item {
+            background: rgba(255,255,255,0.05);
+            margin-bottom: 8px;
+            padding: 12px 16px;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .final-chain-num {
+            font-weight: 800;
+            margin-right: 15px;
+            color: #38bdf8;
+        }
+
+        .ai-verdict-box {
+            background: rgba(255,255,255,0.03);
+            border: 1px dashed rgba(255,255,255,0.2);
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            color: #cbd5e1;
+            margin-top: 20px;
+            line-height: 1.5;
+            display: none;
+        }
+
+        .ai-verdict-tag {
+            background: #38bdf8;
+            color: #0f172a;
+            font-size: 0.65rem;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            display: inline-block;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Model Discovery Engine</h1>
+        <p class="subtitle">Phase Zero: Dynamic Pruning & Meta-Ranking</p>
+
+        <div class="config-card">
+            <div class="input-group">
+                <label>Google AI API Key</label>
+                <input type="password" id="api-key" placeholder="Paste your key to test..." value="">
+            </div>
+            <button id="run-btn">Run Discovery & Meta-Judge</button>
+            <div id="error-msg"></div>
+        </div>
+
+        <div id="stats" class="stats-grid" style="visibility: hidden;">
+            <div class="stat-card">
+                <span class="stat-val" id="total-raw">0</span>
+                <span class="stat-label">Raw Models</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-val" id="total-pruned">0</span>
+                <span class="stat-label">After Pruning</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-val" id="exec-time">0ms</span>
+                <span class="stat-label">Total Time</span>
+            </div>
+        </div>
+
+        <div class="list-container" style="margin-top: 20px;">
+            <div class="discovery-header">
+                <span>#</span>
+                <span>Model ID</span>
+                <span>Tier</span>
+                <span style="text-align: right;">Quota Status</span>
+            </div>
+            <div id="ranked-list">
+                <div style="padding: 40px; color: #94a3b8; text-align: center; font-size: 0.9rem;">
+                    Enter your API key and click "Run" to test the "Zero-Hardcoding" flow.
+                </div>
+            </div>
+        </div>
+
+        <!-- FINAL ACTIVE CHAIN SECTION -->
+        <div id="final-chain" class="final-chain-card">
+            <div class="final-chain-header">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 10px;"><polyline points="7 11 12 17 22 7"></polyline><polyline points="2 12 7 18 17 8"></polyline></svg>
+                The iStudy Final Active Chain
+            </div>
+            <p style="font-size: 0.85rem; color: #94a3b8; margin-bottom: 20px;">
+                These are models that passed the Shadow Probe, <strong>re-ranked by the AI itself</strong> based on current 2026 intelligence benchmarks.
+            </p>
+            <div id="active-items-list">
+                <!-- Populated by JS -->
+            </div>
+
+            <div id="ai-verdict-box" class="ai-verdict-box">
+                <div class="ai-verdict-tag">THE AI'S VERDICT</div>
+                <div id="ai-verdict-text">Analyzing models...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const QUALITY_TIERS = [
+            'gemini-3.0-pro', 'gemini-3-pro', 'gemini-3.0-flash', 'gemini-3-flash',
+            'gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.0-pro', 'gemini-2.0-flash',
+            'gemma-3-27b', 'gemma-2-27b', 'gemini-1.5-pro', 'gemini-1.5-flash',
+            'gemma-3-9b', 'gemma-2-9b', 'gemma-3-2b', 'gemma-2-2b'
+        ];
+
+        async function probeModel(modelId, apiKey) {
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${apiKey}`;
+            try {
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ contents: [{ parts: [{ text: "ping" }] }] })
+                });
+                const data = await res.json();
+                if (data.error) {
+                    const msg = data.error.message?.toLowerCase() || '';
+                    if (msg.includes('permission') || msg.includes('quota') || msg.includes('exhausted')) return { active: false };
+                }
+                if (data.candidates || data.promptFeedback) return { active: true };
+                return { active: false };
+            } catch (e) { return { active: false }; }
+        }
+
+        async function getAiRanking(judgeModelId, candidateList, apiKey) {
+            const prompt = `
+                I have access to these Google AI models: [${candidateList.join(', ')}].
+                Rank them from smartest (most complex reasoning/grading) to fastest (quick responses).
+                Also provide a VERY BRIEF 1-sentence reason why the top model is #1.
+                Output FORMAT: [ModelID1, ModelID2, ...] | Reason: YourReason
+            `;
+
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${judgeModelId}:generateContent?key=${apiKey}`;
+            try {
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+                });
+                const data = await res.json();
+                const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+                
+                // Extract Ranking Array
+                const rankMatch = text.match(/\[(.*?)\]/);
+                const reasonMatch = text.split('| Reason:')[1] || "AI-Judged order based on internal benchmarks.";
+                
+                if (rankMatch) {
+                    const rankedArray = rankMatch[1].split(',').map(s => s.trim().replace(/['"]/g, ''));
+                    // Ensure all elements exist in our candidate list (clean up hallucinations)
+                    const cleanRanked = rankedArray.filter(name => candidateList.includes(name));
+                    // Append any missing candidates at the end
+                    const finalRanked = [...cleanRanked, ...candidateList.filter(name => !cleanRanked.includes(name))];
+                    return { ranked: finalRanked, reason: reasonMatch };
+                }
+                return null;
+            } catch (e) { return null; }
+        }
+
+        document.getElementById('run-btn').addEventListener('click', async () => {
+            const key = document.getElementById('api-key').value.trim();
+            const rankedListEl = document.getElementById('ranked-list');
+            const finalChainEl = document.getElementById('final-chain');
+            const activeItemsEl = document.getElementById('active-items-list');
+            const verdictBox = document.getElementById('ai-verdict-box');
+            const verdictText = document.getElementById('ai-verdict-text');
+            
+            if (!key) return;
+
+            finalChainEl.style.display = 'none';
+            verdictBox.style.display = 'none';
+            rankedListEl.innerHTML = '<div style="padding: 40px; text-align: center;">Discovering & Probing...</div>';
+            const startTime = performance.now();
+
+            try {
+                const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${key}`;
+                const response = await fetch(url);
+                const data = await response.json();
+                const rawModels = data.models || [];
+
+                const pruned = rawModels.filter(m => {
+                    const id = m.name.toLowerCase();
+                    return m.supportedGenerationMethods.includes('generateContent') && !id.includes('embedding') && !id.includes('aqa') && !id.includes('rag');
+                });
+
+                document.getElementById('stats').style.visibility = 'visible';
+                document.getElementById('total-raw').innerText = rawModels.length;
+                document.getElementById('total-pruned').innerText = pruned.length;
+
+        // Shadow Probe & UI Update
+        const activeModels = [];
+        const fullCandidateList = [];
+
+        // Pre-render the discovery list with "Testing" status
+        rankedListEl.innerHTML = pruned.map((m, i) => {
+            const id = m.name.split('/').pop();
+            const isPro = id.includes('pro');
+            const isFlash = id.includes('flash');
+            const tagClass = isPro ? 'tag-pro' : (isFlash ? 'tag-flash' : 'tag-other');
+            const tagName = isPro ? 'PRO' : (isFlash ? 'FLASH' : 'BASE');
+            return `
+                <div class="model-item" id="model-row-${i}">
+                    <span class="rank-badge">${i + 1}</span>
+                    <span style="font-weight: 500;">${id}</span>
+                    <span class="tag ${tagClass}">${tagName}</span>
+                    <span class="status-badge status-pending" id="status-${i}">Testing...</span>
+                </div>
+            `;
+        }).join('');
+
+        // Loop through and poke each model
+        for (let i = 0; i < pruned.length; i++) {
+            const modelId = pruned[i].name.split('/').pop();
+            const statusEl = document.getElementById(`status-${i}`);
+            const rowEl = document.getElementById(`model-row-${i}`);
+            
+            const res = await probeModel(modelId, key);
+            
+            if (res.active) {
+                statusEl.innerText = "✅ Active";
+                statusEl.className = "status-badge status-active";
+                activeModels.push(modelId);
+            } else {
+                statusEl.innerText = "❌ Restricted";
+                statusEl.className = "status-badge status-restricted";
+                rowEl.style.opacity = '0.35';
+            }
+            
+            document.getElementById('exec-time').innerText = `${Math.round(performance.now() - startTime)}ms`;
+        }
+
+        if (activeModels.length === 0) throw new Error("No active models found.");
+
+        // Meta-Judge Phase
+        // Use the highest-tier pre-defined model that is also active to judge the rest.
+        // We look for 'pro' first, then 'flash'.
+        const judgeModelId = activeModels.find(id => id.includes('pro')) || activeModels[0];
+        
+        verdictBox.style.display = 'block';
+        verdictText.innerText = `Calling Judge [${judgeModelId}] to rank the active chain...`;
+
+        const aiVerdictResult = await getAiRanking(judgeModelId, activeModels, key);
+        const finalRank = aiVerdictResult ? aiVerdictResult.ranked : activeModels;
+        const reason = aiVerdictResult ? aiVerdictResult.reason : "Ranked based on model family hierarchy.";
+
+        // Final Render
+        finalChainEl.style.display = 'block';
+        activeItemsEl.innerHTML = finalRank.map((id, i) => `
+            <div class="chain-item">
+                <div><span style="color:#38bdf8; font-weight:800; margin-right:15px;">#${i + 1}</span><strong>${id}</strong></div>
+                <span style="font-size:0.75rem; color:#7dd3fc; opacity:0.8;">${i === 0 ? "Primary Engine" : "Backup Chain"}</span>
+            </div>
+        `).join('');
+        
+        verdictText.innerHTML = `<strong>Judge ${judgeModelId} says:</strong> ${reason}`;
+
+    } catch (err) {
+        rankedListEl.innerHTML = `<div style="padding: 40px; text-align: center; color:#ef4444;">Error: ${err.message}</div>`;
+    }
+});
+
+        // Load existing key
+        const savedRaw = localStorage.getItem('google_api_key');
+        if (savedRaw) {
+            try {
+                const parsed = JSON.parse(savedRaw);
+                const firstKey = Array.isArray(parsed) ? parsed[0]?.key : (typeof parsed === 'string' ? parsed : null);
+                if (firstKey) document.getElementById('api-key').value = firstKey;
+            } catch(e) {}
+        }
+    </script>
+</body>
+</html>
+
+        // Auto-load key from localStorage if it exists to save time for you
+        const savedRaw = localStorage.getItem('google_api_key');
+        if (savedRaw) {
+            try {
+                const parsed = JSON.parse(savedRaw);
+                const firstKey = Array.isArray(parsed) ? parsed[0]?.key : (typeof parsed === 'string' ? parsed : null);
+                if (firstKey) document.getElementById('api-key').value = firstKey;
+            } catch(e) {
+                document.getElementById('api-key').value = savedRaw;
+            }
+        }
+    </script>
+</body>
+</html>

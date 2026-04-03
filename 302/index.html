@@ -18,6 +18,131 @@
     <script src="https://unpkg.com/react-markdown@8.0.7/react-markdown.min.js"></script>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <style>
+        /* Roadmap 2.0 Styles */
+        .roadmap-container-v2 {
+            margin: 20px 0;
+            width: 100%;
+        }
+        .section-header-v2 {
+            font-family: 'Outfit', sans-serif !important;
+            font-size: 14px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 2px solid #000;
+            padding-bottom: 5px;
+            margin-bottom: 20px;
+            display: block;
+            width: 100%;
+            color: #000;
+        }
+        .roadmap-row-v2 {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+            width: 100%;
+        }
+        .label-column-v2 {
+            width: 110px;
+            flex-shrink: 0;
+            line-height: 1.1;
+            padding-right: 12px;
+            text-align: right;
+        }
+        .label-small-v2 {
+            font-size: 10px;
+            color: #94a3b8;
+            font-weight: 500;
+            display: block;
+        }
+        .label-large-v2 {
+            font-size: 12px;
+            color: #1e293b;
+            font-weight: 800;
+            display: block;
+        }
+        .items-grid-v2 {
+            display: flex;
+            gap: 4px;
+            align-items: center;
+            overflow-x: auto;
+            padding-bottom: 5px;
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        .items-grid-v2::-webkit-scrollbar { display: none; }
+
+        .ch-box-v2 {
+            width: 25px;
+            height: 38px;
+            background-color: #f1f5f9;
+            border-radius: 6px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 9px;
+            font-weight: 700;
+            color: #64748b;
+            position: relative;
+            flex-shrink: 0;
+        }
+        .gr-circle-v2 {
+            width: 25px;
+            height: 25px;
+            background-color: #f1f5f9;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 9px;
+            font-weight: 800;
+            color: #64748b;
+            flex-shrink: 0;
+        }
+        .completed-v2 {
+            background-color: #0f172a !important;
+            color: white !important;
+        }
+        .tickmark-v2 {
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            width: 10px;
+            height: 10px;
+            background-color: #3b82f6;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 6px;
+            color: white;
+            font-weight: 900;
+        }
+        .roadmap-subtitle-v2 {
+            display: flex;
+            align-items: center;
+            margin-top: -5px;
+            margin-bottom: 20px;
+            font-size: 11px;
+            color: #64748b;
+            font-weight: 500;
+        }
+        .legend-badge-v2 {
+            width: 12px;
+            height: 12px;
+            background-color: #3b82f6;
+            border-radius: 50%;
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 7px;
+            color: white;
+            font-weight: 900;
+            margin: 0 4px;
+        }
+        .roadmap-spacer-v2 { height: 30px; }
+    </style>
 </head>
 
 <body>
@@ -290,56 +415,55 @@
                 }
             },
             VerifyStudentEmail: async (email) => {
-                const scriptUrl = 'https://script.google.com/macros/s/AKfycbyQzVHshuJBvNCamovpsPB9tYy6F2RQ76gqRgwiyhh8yq1jnrBiM1YCAN1oZkeFHBwkuA/exec';
-                const url = `${scriptUrl}?action=send-code&email=${encodeURIComponent(email)}`;
+                const scriptUrl = 'https://script.google.com/macros/s/AKfycbzfZqALbx-cwWjqyme4ntrfB_F7gpywjmPXyZrIa_BZRf2JmpgsaT1TGrfrE_xsCPPT_A/exec';
                 try {
-                    const response = await fetch(url);
+                    const response = await fetch(scriptUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'text/plain' },
+                        body: JSON.stringify({ action: 'requestOTP', email: email })
+                    });
                     const data = await response.json();
                     return data;
                 } catch (err) {
-                    return { status: 'error', message: err.toString() };
+                    console.error("Email verification error:", err);
+                    return { status: 'error', message: "Connection to Google Sheets failed. Check your Web App URL." };
                 }
             },
             VerifyOTP: async (email, code) => {
-                const scriptUrl = 'https://script.google.com/macros/s/AKfycbyQzVHshuJBvNCamovpsPB9tYy6F2RQ76gqRgwiyhh8yq1jnrBiM1YCAN1oZkeFHBwkuA/exec';
-                const url = `${scriptUrl}?action=verify-code&email=${encodeURIComponent(email)}&code=${encodeURIComponent(code)}`;
+                const scriptUrl = 'https://script.google.com/macros/s/AKfycbzfZqALbx-cwWjqyme4ntrfB_F7gpywjmPXyZrIa_BZRf2JmpgsaT1TGrfrE_xsCPPT_A/exec';
                 try {
-                    const response = await fetch(url);
+                    const response = await fetch(scriptUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'text/plain' },
+                        body: JSON.stringify({ action: 'verifyOTP', email: email, otp: code })
+                    });
                     const data = await response.json();
                     return data;
                 } catch (err) {
                     return { status: 'error', message: err.toString() };
                 }
             },
-            RegisterCompletion: async (email, chapter) => {
-                const scriptUrl = 'https://script.google.com/macros/s/AKfycbyQzVHshuJBvNCamovpsPB9tYy6F2RQ76gqRgwiyhh8yq1jnrBiM1YCAN1oZkeFHBwkuA/exec';
-
-                // Determine if it's a Video or a Chapter
-                const isVideo = chapter.toString().toLowerCase().includes('video');
-                const chNum = parseInt(chapter.toString().replace(/(chapter|video)/i, '').trim());
-                const paddedNum = chNum.toString().padStart(2, '0');
-
-                // Matches standard course naming: "Chapter 01" or "Video 06"
-                // Matches standard course naming: "Chapter 01" or "Video 06"
-                const chapterLabel = isVideo ? `Video ${paddedNum}` : `Chapter ${paddedNum}`;
-
+            RegisterCompletion: async (email, chapter, uniqueCode, reportContent, finalGrade) => {
+                const scriptUrl = 'https://script.google.com/macros/s/AKfycbzfZqALbx-cwWjqyme4ntrfB_F7gpywjmPXyZrIa_BZRf2JmpgsaT1TGrfrE_xsCPPT_A/exec';
                 const payload = {
+                    action: 'registerCompletion',
                     email: email,
-                    studentId: email, // Universal key compatibility
-                    chapter: chapterLabel
+                    studentId: email,
+                    chapter: chapter,
+                    uniqueCode: uniqueCode,
+                    reportContent: reportContent,
+                    finalGrade: finalGrade
                 };
-
                 try {
-                    console.log(`Registering completion:`, payload);
-                    await fetch(scriptUrl, {
+                    const response = await fetch(scriptUrl, {
                         method: 'POST',
-                        mode: 'no-cors',
                         headers: { 'Content-Type': 'text/plain' },
                         body: JSON.stringify(payload)
                     });
-                    return { status: 'success' };
+                    const data = await response.json();
+                    return data;
                 } catch (err) {
-                    console.error("Registration error:", err);
+                    console.error("RegisterCompletion Error:", err);
                     return { status: 'error', message: err.toString() };
                 }
             }
@@ -379,6 +503,101 @@
             joker: { name: "Joker", emoji: "", avatarClass: "avatar-joker" },
             system: { name: "System", emoji: "", avatarClass: "avatar-system" },
             user: { name: "Student", emoji: "👤", avatarClass: "" }
+        };
+
+        const Roadmap = ({ roadmapData }) => {
+            if (!roadmapData) return null;
+
+            const chGrades = {
+                1: 'F', 2: 'F', 3: 'F', 4: 'F', 5: 'D-',
+                6: 'D', 7: 'D+', 8: 'C-', 9: 'C', 10: 'C+',
+                11: 'B-', 12: 'B', 13: 'B+'
+            };
+
+            const vGrades = { 6: 'A-', 8: 'A', 10: 'A+' };
+
+            const isDone = (num, type = 'Chapter') => {
+                const padded = num.toString().padStart(2, '0');
+                // Check multiple variations of the key
+                return !!(roadmapData[`${type} ${padded}`] || 
+                          roadmapData[`${type.toLowerCase()} ${padded}`] ||
+                          roadmapData[`${type} ${num}`]);
+            };
+
+            const chCount = Object.keys(roadmapData).filter(k => k.toLowerCase().includes('chapter') && roadmapData[k]).length;
+            const vCount = Object.keys(roadmapData).filter(k => k.toLowerCase().includes('video') && roadmapData[k]).length;
+
+            return (
+                <div className="roadmap-container-v2">
+                    <div className="roadmap-subtitle-v2">
+                        This <span className="legend-badge-v2">✓</span> indicates your completion so far.
+                    </div>
+
+                    <div className="section-header-v2">Weekly Q&A reports</div>
+                    
+                    <div className="roadmap-row-v2">
+                        <div className="label-column-v2">
+                            <span className="label-small-v2">If you submit this number of</span>
+                            <span className="label-large-v2">chapters &rarr;</span>
+                        </div>
+                        <div className="items-grid-v2">
+                            {[1,2,3,4,5,6,7,8,9,10,11,12,13].map(num => (
+                                <div key={num} className={`ch-box-v2 ${isDone(num) ? 'completed-v2' : ''}`}>
+                                    {num}
+                                    {isDone(num) && <span className="tickmark-v2">✓</span>}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="roadmap-row-v2">
+                        <div className="label-column-v2">
+                            <span className="label-small-v2">your</span>
+                            <span className="label-large-v2">grade is &rarr;</span>
+                        </div>
+                        <div className="items-grid-v2">
+                            {[1,2,3,4,5,6,7,8,9,10,11,12,13].map(num => (
+                                <div key={num} className={`gr-circle-v2 ${num <= chCount ? 'completed-v2' : ''}`}>
+                                    {chGrades[num]}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="roadmap-spacer-v2"></div>
+
+                    <div className="section-header-v2">Final Video Exams</div>
+
+                    <div className="roadmap-row-v2">
+                        <div className="label-column-v2">
+                            <span className="label-small-v2">If you submit this number of</span>
+                            <span className="label-large-v2">videos &rarr;</span>
+                        </div>
+                        <div className="items-grid-v2">
+                            {[6, 8, 10].map(num => (
+                                <div key={num} className={`ch-box-v2 ${vCount >= num ? 'completed-v2' : ''}`}>
+                                    {num}
+                                    {vCount >= num && <span className="tickmark-v2">✓</span>}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="roadmap-row-v2">
+                        <div className="label-column-v2">
+                            <span className="label-small-v2">your</span>
+                            <span className="label-large-v2">grade is &rarr;</span>
+                        </div>
+                        <div className="items-grid-v2">
+                            {[6, 8, 10].map(num => (
+                                <div key={num} className={`gr-circle-v2 ${vCount >= num ? 'completed-v2' : ''}`}>
+                                    {vGrades[num]}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            );
         };
 
         function App() {
@@ -425,6 +644,7 @@
             const [videoStep, setVideoStep] = useState('email'); // 'email' or 'otp'
             const [videoOtpInput, setVideoOtpInput] = useState('');
             const [videoError, setVideoError] = useState('');
+            const [verificationCode, setVerificationCode] = useState('');
 
             // SCROLL CONTROL: Force "overflow: hidden" on Landing Page
             useEffect(() => {
@@ -1100,6 +1320,7 @@ You are managing a "Critical Thinking Simulation" and have the intellect of a un
                     setIsProcessing(false);
                     if (res.status === 'success') {
                         setIsWaitingForOTP(false);
+                        setVerificationCode(text);
                         setRoadmapData(res.completion);
                         addMessage('system', "Verification successful! Welcome back. Generating your progress roadmap...");
                         setTimeout(() => {
@@ -1210,14 +1431,16 @@ You are managing a "Critical Thinking Simulation" and have the intellect of a un
                 runNextStep(currentQIndex, reviewStep, text);
             };
 
-            const generateReportData = () => {
-                const content = `ISTUDY REPORT - CHAPTER ${submission.chapter} \n` +
-                    `STUDENT ID: ${email1} \n` +
+            const generateReportData = (uCode) => {
+                const content = `ISTUDY REPORT - CHAPTER ${submission.chapter}\n` +
+                    `STUDENT ID: ${email1}\n` +
+                    `COMPLETION CODE: ${uCode}\n` +
                     `------------------------------------------\n\n` +
                     submission.questions.map(q => `QUESTION ${q.question_number}: ${q.question_text} \nRESPONSE: ${q.final_response} \n`).join('\n---\n');
                 const chNum = (submission.chapter || '0').toString().padStart(2, '0');
                 const fileName = `Report_Chapter_${chNum}.txt`;
                 return {
+                    content,
                     uri: 'data:text/plain;charset=utf-8,' + encodeURIComponent("\ufeff" + content),
                     fileName
                 };
@@ -1381,6 +1604,7 @@ You are managing a "Critical Thinking Simulation" and have the intellect of a un
                 try {
                     const res = await window.Core.VerifyOTP(videoCheckEmail, videoOtpInput);
                     if (res.status === 'success') {
+                        setVerificationCode(videoOtpInput);
                         const comp = res.completion;
                         let completedCount = 0;
                         const compKeys = Object.keys(comp);
@@ -1463,10 +1687,6 @@ You are managing a "Critical Thinking Simulation" and have the intellect of a un
                                             </span> Upload exam videos
                                         </button>
                                     </div>
-
-
-
-
                                 </motion.div>
                             )}
                             {view === 'chat' && (
@@ -1532,8 +1752,18 @@ You are managing a "Critical Thinking Simulation" and have the intellect of a un
                                                                             addMessage('system', "Downloading your report and registering completion...");
 
                                                                             try {
+                                                                                // Generate 17-digit unique code: 3-digit verification + YYYYMMDDHHMMSS
+                                                                                const now = new Date();
+                                                                                const timestamp = now.getFullYear().toString() +
+                                                                                    (now.getMonth() + 1).toString().padStart(2, '0') +
+                                                                                    now.getDate().toString().padStart(2, '0') +
+                                                                                    now.getHours().toString().padStart(2, '0') +
+                                                                                    now.getMinutes().toString().padStart(2, '0') +
+                                                                                    now.getSeconds().toString().padStart(2, '0');
+                                                                                const uniqueCode = (verificationCode || '000').toString().padStart(3, '0') + timestamp;
+
                                                                                 // 1. First trigger the download manually
-                                                                                const r = generateReportData();
+                                                                                const r = generateReportData(uniqueCode);
                                                                                 const link = document.createElement('a');
                                                                                 link.href = r.uri;
                                                                                 link.download = r.fileName;
@@ -1544,16 +1774,48 @@ You are managing a "Critical Thinking Simulation" and have the intellect of a un
                                                                                 // 2. Wait a brief moment to ensure Safari handles the download start
                                                                                 await new Promise(res => setTimeout(res, 800));
 
-                                                                                // 3. Then send the tick to Google Sheets
-                                                                                await window.Core.RegisterCompletion(
+                                                                                // 3. Then send the data to Google Sheets & Email
+                                                                                // Calculate standing grade (Chapters + Videos)
+                                                                                const gradesMap = { 1: 'F', 2: 'F', 3: 'F', 4: 'F', 5: 'D-', 6: 'D', 7: 'D+', 8: 'C-', 9: 'C', 10: 'C+', 11: 'B-', 12: 'B', 13: 'B+' };
+                                                                                
+                                                                                const padded = submission.chapter.toString().padStart(2, '0');
+                                                                                const isAlreadyDone = roadmapData && (roadmapData[`Chapter ${padded}`] || roadmapData[`chapter ${padded}`] || roadmapData[`Chapter ${submission.chapter}`]);
+                                                                                
+                                                                                let chCount = Object.keys(roadmapData || {}).filter(k => k.toLowerCase().includes('chapter') && roadmapData[k]).length;
+                                                                                if (!isAlreadyDone) chCount += 1;
+                                                                                if (chCount > 13) chCount = 13;
+
+                                                                                const vCount = Object.keys(roadmapData || {}).filter(k => k.toLowerCase().includes('video') && roadmapData[k]).length;
+                                                                                
+                                                                                let newGrade = gradesMap[chCount] || 'F';
+                                                                                if (vCount >= 10) newGrade = 'A+';
+                                                                                else if (vCount >= 8) newGrade = 'A';
+                                                                                else if (vCount >= 6) newGrade = 'A-';
+
+                                                                                const res = await window.Core.RegisterCompletion(
                                                                                     submission.student_email,
-                                                                                    parseInt(submission.chapter, 10)
+                                                                                    submission.chapter,
+                                                                                    uniqueCode,
+                                                                                    r.content,
+                                                                                    newGrade
                                                                                 );
 
-                                                                                setTimeout(() => setView('completion'), 1000);
+                                                                                if (res && res.status === 'success') {
+                                                                                    // Update local roadmap data so the scoreboard reflects completion immediately
+                                                                                    const padded = submission.chapter.toString().padStart(2, '0');
+                                                                                    setRoadmapData(prev => ({
+                                                                                        ...prev,
+                                                                                        [`Chapter ${padded}`]: true
+                                                                                    }));
+
+                                                                                    addMessage('system', "✅ **Submission Successful!** Your report has been registered and your final grade in the spreadsheet has been updated.");
+                                                                                    setTimeout(() => setView('completion'), 2000);
+                                                                                } else {
+                                                                                    addMessage('system', "❌ **Submission Failed:** " + (res.message || "Unknown error connecting to Google Sheets."));
+                                                                                }
                                                                             } catch (err) {
                                                                                 console.error("Submission error:", err);
-                                                                                setView('completion');
+                                                                                addMessage('system', "❌ **Submission Error:** " + err.message);
                                                                             } finally {
                                                                                 setIsProcessing(false);
                                                                                 setIsSubmitting(false);
@@ -1575,21 +1837,21 @@ You are managing a "Critical Thinking Simulation" and have the intellect of a un
 
                                                                 <div className="briefing-avatars-list">
                                                                     <div className="briefing-avatar-row">
-                                                                        <img src="assets/avatar_newton.png" className="briefing-avatar-img" />
+                                                                        <img src="../assets/avatar_newton.png" className="briefing-avatar-img" />
                                                                         <div className="briefing-avatar-content">
                                                                             <strong>Getting the facts right. </strong>
                                                                             For this, <strong>Newton</strong> will measure the accuracy of your responses against the lecture material.
                                                                         </div>
                                                                     </div>
                                                                     <div className="briefing-avatar-row">
-                                                                        <img src="assets/avatar_tontin.png" className="briefing-avatar-img" />
+                                                                        <img src="../assets/avatar_tontin.png" className="briefing-avatar-img" />
                                                                         <div className="briefing-avatar-content">
                                                                             <strong>The power of explanation. </strong>
                                                                             The best proof that you know something is when you can explain it to someone else! <strong>Tontin</strong> here is in need of some explaining.
                                                                         </div>
                                                                     </div>
                                                                     <div className="briefing-avatar-row">
-                                                                        <img src="assets/avatar_joker.png" className="briefing-avatar-img" />
+                                                                        <img src="../assets/avatar_joker.png" className="briefing-avatar-img" />
                                                                         <div className="briefing-avatar-content">
                                                                             <strong>Critical Thinking. </strong>
                                                                             For this, <strong>Joker</strong> may or may not attempt to deceive you with his statements. Think critically about what he says—he may pull some tricks on you!
@@ -1609,70 +1871,8 @@ You are managing a "Critical Thinking Simulation" and have the intellect of a un
                                                                 }}>Click to start</button>
                                                             </div>
                                                         ) : msg.type === 'roadmap' ? (
-                                                            <div className="roadmap-container">
-                                                                <div className="roadmap-title">Academic Roadmap</div>
-
-                                                                <div className="roadmap-section">
-                                                                    <div className="roadmap-section-title">Chapters submitted</div>
-                                                                    <div className="roadmap-row">
-                                                                        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13].map(num => {
-                                                                            const padded = num.toString().padStart(2, '0');
-                                                                            const isDone = roadmapData && (
-                                                                                roadmapData[`chapter ${padded}`] ||
-                                                                                roadmapData[`chapter${padded}`] ||
-                                                                                roadmapData[`Chapter ${padded}`] ||
-                                                                                roadmapData[`Chapter${padded}`] ||
-                                                                                roadmapData[`chapter ${num}`] ||
-                                                                                roadmapData[`chapter${num}`]
-                                                                            );
-                                                                            const grades = {
-                                                                                1: 'F', 2: 'F', 3: 'F', 4: 'F', 5: 'D-', 6: 'D',
-                                                                                7: 'D+', 8: 'C-', 9: 'C', 10: 'C+', 11: 'B-', 12: 'B', 13: 'B+'
-                                                                            };
-                                                                            return (
-                                                                                <div key={num} className="roadmap-column">
-                                                                                    <div className={`roadmap-box ${isDone ? 'completed' : ''}`}>
-                                                                                        {num}
-                                                                                        {isDone && <span className="tick">✓</span>}
-                                                                                    </div>
-                                                                                    <div className={`roadmap-grade-box ${isDone ? 'completed' : ''}`}>
-                                                                                        {grades[num]}
-                                                                                    </div>
-                                                                                </div>
-                                                                            );
-                                                                        })}
-                                                                    </div>
-                                                                </div>
-
-                                                                <div className="roadmap-section">
-                                                                    <div className="roadmap-section-title">Exam videos submitted</div>
-                                                                    <div className="roadmap-row">
-                                                                        {[6, 8, 10].map(num => {
-                                                                            const padded = num.toString().padStart(2, '0');
-                                                                            const isDone = roadmapData && (
-                                                                                roadmapData[`video ${padded}`] ||
-                                                                                roadmapData[`video${padded}`] ||
-                                                                                roadmapData[`Video ${padded}`] ||
-                                                                                roadmapData[`Video${padded}`] ||
-                                                                                roadmapData[`video ${num}`] ||
-                                                                                roadmapData[`video${num}`]
-                                                                            );
-                                                                            const vGrades = { 6: 'A-', 8: 'A', 10: 'A+' };
-                                                                            return (
-                                                                                <div key={num} className="roadmap-column">
-                                                                                    <div className={`roadmap-box ${isDone ? 'completed' : ''}`}>
-                                                                                        {num}
-                                                                                        {isDone && <span className="tick">✓</span>}
-                                                                                    </div>
-                                                                                    <div className={`roadmap-grade-box ${isDone ? 'completed' : ''}`}>
-                                                                                        {vGrades[num]}
-                                                                                    </div>
-                                                                                </div>
-                                                                            );
-                                                                        })}
-                                                                    </div>
-                                                                </div>
-
+                                                            <div className="roadmap-wrapper">
+                                                                <Roadmap roadmapData={roadmapData} />
                                                                 <div style={{ marginTop: '20px' }}>
                                                                     <button
                                                                         className="main-upload-btn"
@@ -1725,7 +1925,7 @@ You are managing a "Critical Thinking Simulation" and have the intellect of a un
                                     </div>
                                 </motion.div>
                             )}
-                            {view === 'completion' && (
+                             {view === 'completion' && (
                                 <motion.div
                                     key="completion"
                                     initial={{ opacity: 0 }}
@@ -1737,6 +1937,11 @@ You are managing a "Critical Thinking Simulation" and have the intellect of a un
                                     <p>
                                         Your <strong>revised</strong> responses have been saved to your local machine, and Dr. Mora has been <strong>notified</strong>.
                                     </p>
+                                    
+                                    <div style={{ width: '100%', maxWidth: '600px', margin: '0 auto 40px auto', padding: '20px', background: '#f8fafc', borderRadius: '20px', border: '1px solid #e2e8f0' }}>
+                                        <Roadmap roadmapData={roadmapData} />
+                                    </div>
+
                                     <button className="btn-primary" onClick={() => window.location.reload()}>
                                         Close App
                                     </button>
@@ -1759,7 +1964,6 @@ You are managing a "Critical Thinking Simulation" and have the intellect of a un
                                             value={inputValue}
                                             onChange={(e) => {
                                                 setInputValue(e.target.value);
-                                                adjustTextareaHeight();
                                             }}
                                             onKeyDown={(e) => {
                                                 if (e.key === 'Enter' && !e.shiftKey) {
@@ -1974,7 +2178,7 @@ You are managing a "Critical Thinking Simulation" and have the intellect of a un
                     <footer className="landing-footer">
                         IStudy is an AI-powered essay review developed by <a href="https://github.com/Camilo-Mora" target="_blank">Camilo Mora, Ph.D.</a>
                     </footer>
-                </div >
+                </div>
             );
         }
         ReactDOM.createRoot(document.getElementById('root')).render(<App />);

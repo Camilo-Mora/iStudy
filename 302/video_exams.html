@@ -16,7 +16,65 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://unpkg.com/framer-motion@10.16.4/dist/framer-motion.js"></script>
     <script src="https://unpkg.com/react-markdown@8.0.7/react-markdown.min.js"></script>
-    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+    <style>
+        /* Tooltip Styles */
+        .info-tooltip {
+            position: relative;
+            display: inline-flex;
+            cursor: help;
+            margin-left: 6px;
+            color: #94a3b8;
+            font-size: 13px;
+            vertical-align: middle;
+            transition: color 0.2s;
+        }
+
+        .info-tooltip:hover {
+            color: #3b82f6;
+        }
+
+        .info-tooltip .tooltiptext {
+            visibility: hidden;
+            width: 220px;
+            background-color: #0f172a;
+            color: #fff;
+            text-align: center;
+            border-radius: 8px;
+            padding: 10px;
+            position: absolute;
+            z-index: 1000;
+            bottom: 125%;
+            left: 50%;
+            margin-left: -110px;
+            opacity: 0;
+            transition: opacity 0.3s, transform 0.3s;
+            transform: translateY(10px);
+            font-size: 12px;
+            font-weight: 500;
+            line-height: 1.5;
+            pointer-events: none;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            text-transform: none;
+            /* Grid header is uppercase, we want normal text here */
+        }
+
+        .info-tooltip .tooltiptext::after {
+            content: "";
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            margin-left: -5px;
+            border-width: 5px;
+            border-style: solid;
+            border-color: #0f172a transparent transparent transparent;
+        }
+
+        .info-tooltip:hover .tooltiptext {
+            visibility: visible;
+            opacity: 1;
+            transform: translateY(0);
+        }
+    </style>
 </head>
 
 <body>
@@ -30,10 +88,13 @@
         // Core and Fetch Logic
         window.Core = window.Core || {
             VerifyStudentEmail: async (email) => {
-                const scriptUrl = 'https://script.google.com/macros/s/AKfycbyQzVHshuJBvNCamovpsPB9tYy6F2RQ76gqRgwiyhh8yq1jnrBiM1YCAN1oZkeFHBwkuA/exec';
-                const url = `${scriptUrl}?action=send-code&email=${encodeURIComponent(email)}`;
+                const scriptUrl = 'https://script.google.com/macros/s/AKfycbzfZqALbx-cwWjqyme4ntrfB_F7gpywjmPXyZrIa_BZRf2JmpgsaT1TGrfrE_xsCPPT_A/exec';
                 try {
-                    const response = await fetch(url);
+                    const response = await fetch(scriptUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'text/plain' },
+                        body: JSON.stringify({ action: 'requestOTP', email: email })
+                    });
                     const data = await response.json();
                     return data;
                 } catch (err) {
@@ -41,10 +102,13 @@
                 }
             },
             VerifyOTP: async (email, code) => {
-                const scriptUrl = 'https://script.google.com/macros/s/AKfycbyQzVHshuJBvNCamovpsPB9tYy6F2RQ76gqRgwiyhh8yq1jnrBiM1YCAN1oZkeFHBwkuA/exec';
-                const url = `${scriptUrl}?action=verify-code&email=${encodeURIComponent(email)}&code=${encodeURIComponent(code)}`;
+                const scriptUrl = 'https://script.google.com/macros/s/AKfycbzfZqALbx-cwWjqyme4ntrfB_F7gpywjmPXyZrIa_BZRf2JmpgsaT1TGrfrE_xsCPPT_A/exec';
                 try {
-                    const response = await fetch(url);
+                    const response = await fetch(scriptUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'text/plain' },
+                        body: JSON.stringify({ action: 'verifyOTP', email: email, otp: code })
+                    });
                     const data = await response.json();
                     return data;
                 } catch (err) {
@@ -52,10 +116,13 @@
                 }
             },
             FetchRoadmapData: async (email) => {
-                const scriptUrl = 'https://script.google.com/macros/s/AKfycbyQzVHshuJBvNCamovpsPB9tYy6F2RQ76gqRgwiyhh8yq1jnrBiM1YCAN1oZkeFHBwkuA/exec';
-                const url = `${scriptUrl}?action=get-status&email=${encodeURIComponent(email)}`;
+                const scriptUrl = 'https://script.google.com/macros/s/AKfycbzfZqALbx-cwWjqyme4ntrfB_F7gpywjmPXyZrIa_BZRf2JmpgsaT1TGrfrE_xsCPPT_A/exec';
                 try {
-                    const response = await fetch(url);
+                    const response = await fetch(scriptUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'text/plain' },
+                        body: JSON.stringify({ action: 'getStatus', email: email })
+                    });
                     const data = await response.json();
                     return data;
                 } catch (err) {
@@ -64,6 +131,7 @@
                 }
             }
         };
+
 
         function App() {
             const [view, setView] = useState('video_portal');
@@ -84,8 +152,8 @@
             }, [videoCheckEmail]);
 
             const [videoRows, setVideoRows] = useState([
-                { chapter: '', url: '' }, { chapter: '', url: '' }, { chapter: '', url: '' },
-                { chapter: '', url: '' }, { chapter: '', url: '' }, { chapter: '', url: '' }
+                { chapter: '', url: '', code: '' }, { chapter: '', url: '', code: '' }, { chapter: '', url: '', code: '' },
+                { chapter: '', url: '', code: '' }, { chapter: '', url: '', code: '' }, { chapter: '', url: '', code: '' }
             ]);
             const [isVideoSubmitting, setIsVideoSubmitting] = useState(false);
             const [showVideoSuccess, setShowVideoSuccess] = useState(false);
@@ -118,12 +186,12 @@
             }, []);
 
             const addVideoRow = () => {
-                setVideoRows([...videoRows, { chapter: '', url: '' }]);
+                setVideoRows([...videoRows, { chapter: '', url: '', code: '' }]);
             };
 
             const removeVideoRow = (idx) => {
                 const updated = videoRows.filter((_, i) => i !== idx);
-                setVideoRows(updated.length > 0 ? updated : [{ chapter: '', url: '' }]);
+                setVideoRows(updated.length > 0 ? updated : [{ chapter: '', url: '', code: '' }]);
             };
 
             const updateVideoRow = (index, field, value) => {
@@ -133,11 +201,41 @@
             };
 
             const calculateVideoGrade = () => {
-                const filledCount = videoRows.filter(r => r.chapter && r.url.trim().length > 10).length;
+                const filledCount = videoRows.filter(r => r.chapter && r.url.trim().length > 10 && isCodeValid(r)).length;
                 if (filledCount >= 10) return 'A+';
                 if (filledCount >= 8) return 'A';
                 if (filledCount >= 6) return 'A-';
                 return 'B+';
+            };
+
+            const vGrades = { 6: 'A-', 8: 'A', 10: 'A+' };
+
+            const isDone = (num, type = 'Chapter') => {
+                const padded = num.toString().padStart(2, '0');
+                const val = (roadmapData[`${type} ${padded}`] ||
+                    roadmapData[`${type.toLowerCase()} ${padded}`] ||
+                    roadmapData[`${type} ${num}`]);
+                return !!val;
+            };
+
+            const isCodeValid = (row) => {
+                if (!row.chapter || !roadmapData) return false;
+                const padded = row.chapter.toString().padStart(2, '0');
+                const expected = (roadmapData[`Chapter ${padded}`] ||
+                    roadmapData[`chapter ${padded}`] ||
+                    roadmapData[`Chapter ${row.chapter}`]);
+                return expected && row.code.trim() === expected.toString().trim();
+            };
+
+            const getCodeOwner = (enteredCode) => {
+                if (!enteredCode || !roadmapData) return null;
+                const trimmed = enteredCode.trim();
+                for (let key in roadmapData) {
+                    if (key.toLowerCase().includes('chapter') && roadmapData[key] && roadmapData[key].toString().trim() === trimmed) {
+                        return key.replace(/chapter\s*/i, '');
+                    }
+                }
+                return null;
             };
 
             const handleVideoSubmit = async () => {
@@ -161,38 +259,51 @@
                     return;
                 }
 
+                // Verify all filled rows have valid codes before submitting
+                const invalidCodes = filledRows.filter(r => !isCodeValid(r));
+                if (invalidCodes.length > 0) {
+                    alert("⚠️ One or more completion codes are incorrect. Please check the codes in red.");
+                    return;
+                }
+
                 setIsVideoSubmitting(true);
                 const grade = calculateVideoGrade();
                 setFinalProjectedGrade(grade);
 
                 try {
-                    const VIDEO_SCRIPT_URL = "https://script.google.com/a/macros/hawaii.edu/s/AKfycbw-kZ9z4ME-TpV4br_UPbAhGFd1MV9Umd6uwHWcNFeCXj3Jfvjf_wNEFFjnE7dZwn2V/exec";
+                    const VIDEO_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzfZqALbx-cwWjqyme4ntrfB_F7gpywjmPXyZrIa_BZRf2JmpgsaT1TGrfrE_xsCPPT_A/exec";
                     const payload = {
+                        action: 'registerVideoPortfolio',
                         email: videoCheckEmail,
                         studentId: videoCheckEmail, // Support for alternate script keys
                         finalGrade: grade, // Pass the calculated final grade to the script
                         videos: filledRows.map(r => ({
                             chapter: r.chapter.toString().padStart(2, '0'),
-                            url: r.url
+                            url: r.url,
+                            code: r.code
                         }))
                     };
 
                     console.log("Submitting payload to Google Script:", payload);
 
-                    // We use mode: 'no-cors' for Google Apps Script POST requests
-                    await fetch(VIDEO_SCRIPT_URL, {
+                    const response = await fetch(VIDEO_SCRIPT_URL, {
                         method: 'POST',
-                        mode: 'no-cors',
                         headers: { 'Content-Type': 'text/plain' },
                         body: JSON.stringify(payload)
                     });
 
-                    // Wait a bit for the operation to complete on the sheet
-                    await new Promise(r => setTimeout(r, 1500));
-                    setShowVideoSuccess(true);
+                    const res = await response.json();
+
+                    if (res && res.status === 'success') {
+                        // Wait a bit for the operation to complete on the sheet
+                        await new Promise(r => setTimeout(r, 1500));
+                        setShowVideoSuccess(true);
+                    } else {
+                        alert("❌ Submission Failed: " + (res.message || "Unknown error from Google Sheets."));
+                    }
                 } catch (err) {
                     console.error("Submission error:", err);
-                    alert("Error submitting videos. Please try again.");
+                    alert("❌ Submission Error: " + err.message);
                 } finally {
                     setIsVideoSubmitting(false);
                 }
@@ -222,8 +333,17 @@
 
                                     <div className="video-portal-layout">
                                         <div className="video-form-section">
-                                            <div className="video-form-grid">
+                                            <div className="video-form-grid" style={{ gridTemplateColumns: '140px 120px 1fr 40px' }}>
                                                 <div className="grid-header">Chapter</div>
+                                                <div className="grid-header" style={{ display: 'flex', alignItems: 'center' }}>
+                                                    Code
+                                                    <span className="info-tooltip">
+                                                        ⓘ
+                                                        <span className="tooltiptext">
+                                                            This is the <strong>COMPLETION CODE</strong> that appears at the top of each of your <strong>Q&A reports</strong>; these are the reports you received via email after completing the given chapter and the reports you should have use to study for the exams.
+                                                        </span>
+                                                    </span>
+                                                </div>
                                                 <div className="grid-header">YouTube URL</div>
                                                 <div className="grid-header"></div>
                                                 {videoRows.map((row, idx) => (
@@ -241,12 +361,48 @@
                                                                 return <option key={chNum} value={chNum}>Chapter {chNum}</option>;
                                                             })}
                                                         </select>
+                                                        <div style={{ position: 'relative' }}>
+                                                            <input
+                                                                type="text"
+                                                                className="video-input"
+                                                                placeholder="Code..."
+                                                                value={row.code}
+                                                                style={{
+                                                                    fontFamily: 'monospace',
+                                                                    width: '100%',
+                                                                    color: row.code && isCodeValid(row) ? '#166534' : row.code ? '#b91c1c' : 'inherit',
+                                                                    borderColor: row.code && isCodeValid(row) ? '#166534' : row.code ? '#ef4444' : '#e2e8f0',
+                                                                    background: row.code && isCodeValid(row) ? '#f0fdf4' : row.code ? '#fef2f2' : 'transparent'
+                                                                }}
+                                                                onChange={(e) => updateVideoRow(idx, 'code', e.target.value)}
+                                                                disabled={!row.chapter}
+                                                            />
+                                                            {row.code && !isCodeValid(row) && (
+                                                                <div style={{
+                                                                    fontSize: '8px',
+                                                                    color: '#b91c1c',
+                                                                    position: 'absolute',
+                                                                    bottom: '-14px',
+                                                                    left: '2px',
+                                                                    fontWeight: 'bold',
+                                                                    whiteSpace: 'normal',
+                                                                    width: 'max-content',
+                                                                    maxWidth: '140px',
+                                                                    lineHeight: '1.2'
+                                                                }}>
+                                                                    {getCodeOwner(row.code)
+                                                                        ? `Matches Chapter ${getCodeOwner(row.code)}`
+                                                                        : "This code does not match our records. Check your Q&A report for this chapter."}
+                                                                </div>
+                                                            )}
+                                                        </div>
                                                         <input
                                                             type="text"
                                                             className="video-input"
-                                                            placeholder="https://www.youtube.com/watch?v=..."
+                                                            placeholder={!row.chapter ? "Chapter first" : !isCodeValid(row) ? "Enter valid code first" : "YouTube URL..."}
                                                             value={row.url}
                                                             onChange={(e) => updateVideoRow(idx, 'url', e.target.value)}
+                                                            disabled={!isCodeValid(row)}
                                                         />
                                                         <button className="remove-row-btn" onClick={() => removeVideoRow(idx)}>✕</button>
                                                     </React.Fragment>
@@ -265,16 +421,16 @@
                                             </div>
                                         </div>
 
-                                        <div className="video-grade-section">
+                                        <div className="video-grade-section" style={{ minWidth: '400px' }}>
                                             <div className="grade-card-large">
                                                 <div className="grade-header-top">
-                                                    {videoRows.filter(r => r.chapter && r.url.trim().length > 10).length < 6
+                                                    {videoRows.filter(r => r.chapter && r.url.trim().length > 10 && isCodeValid(r)).length < 6
                                                         ? "Your current grade is"
                                                         : "Your projected grade in this class will be:"}
                                                 </div>
                                                 <div className="grade-letter-giant">{calculateVideoGrade()}</div>
                                                 <div className="grade-footer-bottom">
-                                                    {videoRows.filter(r => r.chapter && r.url.trim().length > 10).length < 6
+                                                    {videoRows.filter(r => r.chapter && r.url.trim().length > 10 && isCodeValid(r)).length < 6
                                                         ? "given 13 Q&A reports you submitted"
                                                         : "{pending review of the videos}"}
                                                 </div>
@@ -288,13 +444,14 @@
 
                     {showVideoSuccess && (
                         <div className="modal-overlay">
-                            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="modal-content success-modal">
+                            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="modal-content success-modal" style={{ maxWidth: '900px' }}>
                                 <h3>Submission Successful!</h3>
                                 <p>Your final grade in this class is projected to be <strong>{finalProjectedGrade}</strong>.</p>
-                                <button className="btn-primary" onClick={() => {
-                                    setShowVideoSuccess(false);
-                                    window.location.href = 'index.html';
-                                }}>Confirm</button>
+                                <div style={{ marginTop: '30px', textAlign: 'center' }}>
+                                    <button className="btn-primary" onClick={() => {
+                                        window.location.href = 'index.html';
+                                    }}>Confirm & Exit</button>
+                                </div>
                             </motion.div>
                         </div>
                     )}
