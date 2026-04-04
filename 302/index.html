@@ -24,6 +24,7 @@
             margin: 20px 0;
             width: 100%;
         }
+
         .section-header-v2 {
             font-family: 'Outfit', sans-serif !important;
             font-size: 14px;
@@ -37,12 +38,14 @@
             width: 100%;
             color: #000;
         }
+
         .roadmap-row-v2 {
             display: flex;
             align-items: center;
             margin-bottom: 8px;
             width: 100%;
         }
+
         .label-column-v2 {
             width: 110px;
             flex-shrink: 0;
@@ -50,18 +53,21 @@
             padding-right: 12px;
             text-align: right;
         }
+
         .label-small-v2 {
             font-size: 10px;
             color: #94a3b8;
             font-weight: 500;
             display: block;
         }
+
         .label-large-v2 {
             font-size: 12px;
             color: #1e293b;
             font-weight: 800;
             display: block;
         }
+
         .items-grid-v2 {
             display: flex;
             gap: 4px;
@@ -71,7 +77,10 @@
             -ms-overflow-style: none;
             scrollbar-width: none;
         }
-        .items-grid-v2::-webkit-scrollbar { display: none; }
+
+        .items-grid-v2::-webkit-scrollbar {
+            display: none;
+        }
 
         .ch-box-v2 {
             width: 25px;
@@ -87,6 +96,7 @@
             position: relative;
             flex-shrink: 0;
         }
+
         .gr-circle-v2 {
             width: 25px;
             height: 25px;
@@ -100,10 +110,12 @@
             color: #64748b;
             flex-shrink: 0;
         }
+
         .completed-v2 {
             background-color: #0f172a !important;
             color: white !important;
         }
+
         .tickmark-v2 {
             position: absolute;
             top: 2px;
@@ -119,6 +131,7 @@
             color: white;
             font-weight: 900;
         }
+
         .roadmap-subtitle-v2 {
             display: flex;
             align-items: center;
@@ -128,6 +141,7 @@
             color: #64748b;
             font-weight: 500;
         }
+
         .legend-badge-v2 {
             width: 12px;
             height: 12px;
@@ -141,7 +155,10 @@
             font-weight: 900;
             margin: 0 4px;
         }
-        .roadmap-spacer-v2 { height: 30px; }
+
+        .roadmap-spacer-v2 {
+            height: 30px;
+        }
     </style>
 </head>
 
@@ -272,11 +289,7 @@
                 let keys = [];
                 try {
                     const parsed = JSON.parse(raw);
-                    if (Array.isArray(parsed)) {
-                        keys = parsed;
-                    } else {
-                        keys = [{ key: raw, label: 'Default' }];
-                    }
+                    keys = Array.isArray(parsed) ? parsed : [{ key: raw, label: 'Default' }];
                 } catch (e) {
                     keys = [{ key: raw, label: 'Default' }];
                 }
@@ -284,20 +297,24 @@
                 keys = keys.filter(k => k && k.key && k.key.trim().length > 10);
                 if (keys.length === 0) throw new Error("No valid API Keys available.");
 
-                // Normalize model input or use default from localStorage if available in context, else hard default
-                // Normalize model input or use default from localStorage if available in context, else hard default
-                let targetModel = model || 'gemini-3-flash-preview';
+                // 1. DYNAMIC CHAIN RESOLUTION
+                // We prioritize the user's selected model, then fall back using the discovered Active Chain.
+                let targetModel = model || localStorage.getItem('iStudy_preferred_model') || 'gemini-1.5-flash';
 
-                // Strict Chain: Only use the two verified working models
-                // If user selected 2.5, try that first, then 3-preview.
-                // If user selected 3 (or anything else), try 3-preview first, then 2.5.
                 let uniqueChain = [];
-                if (targetModel === 'gemini-2.5-flash') {
-                    uniqueChain = ['gemini-2.5-flash', 'gemini-3-flash-preview', 'gemma-3-27b-it'];
-                } else if (targetModel === 'gemma-3-27b-it') {
-                    uniqueChain = ['gemma-3-27b-it', 'gemini-2.5-flash', 'gemini-3-flash-preview'];
+                const savedChainRaw = localStorage.getItem('iStudy_active_chain');
+                let savedChain = [];
+                try {
+                    savedChain = savedChainRaw ? JSON.parse(savedChainRaw) : [];
+                } catch (e) { savedChain = []; }
+
+                if (savedChain.length > 0) {
+                    // Use the discovered chain, putting chosen model first
+                    uniqueChain = [targetModel, ...savedChain.filter(m => m !== targetModel)];
                 } else {
-                    uniqueChain = ['gemini-3-flash-preview', 'gemini-2.5-flash', 'gemma-3-27b-it'];
+                    // EMERGENCY FALLBACK: If no chain discovered, use a minimal safe list
+                    uniqueChain = [targetModel, 'gemini-1.5-flash', 'gemini-1.5-pro', 'gemma-2-27b-it'];
+                    uniqueChain = [...new Set(uniqueChain)]; // Remove duplicates
                 }
 
                 const errorLog = [];
@@ -309,7 +326,9 @@
                     for (let i = 0; i < keys.length; i++) {
                         const kObj = keys[i];
                         const apiKey = kObj.key.trim();
-                        const url = `https://generativelanguage.googleapis.com/v1beta/models/${currentModel}:generateContent?key=${apiKey}`;
+                        // Handle potential 'models/' prefix in IDs
+                        const cleanModelId = currentModel.includes('/') ? currentModel : `models/${currentModel}`;
+                        const url = `https://generativelanguage.googleapis.com/v1beta/${cleanModelId}:generateContent?key=${apiKey}`;
 
                         try {
                             console.log(`AiCall [Key: ${kObj.label || 'Default'} | Model: ${currentModel}]: Requesting...`);
@@ -329,7 +348,6 @@
 
                             const data = await response.json();
 
-                            // 1. API Level Error
                             if (data.error) {
                                 const msg = data.error.message || JSON.stringify(data.error);
                                 const errStr = `[${currentModel}]: ${msg}`;
@@ -338,7 +356,6 @@
                                 continue;
                             }
 
-                            // 2. Safety / Empty Content Check
                             const hasContent = data?.candidates?.[0]?.content?.parts?.[0]?.text;
                             const isSafetyBlocked = data?.candidates?.[0]?.finishReason === 'SAFETY' || data?.promptFeedback?.blockReason === 'SAFETY';
 
@@ -347,10 +364,10 @@
                                 const errStr = `[${currentModel}]: ${reason}`;
                                 console.warn(errStr);
                                 errorLog.push(errStr);
-                                continue; // Try next key/model silently
+                                continue;
                             }
 
-                            return { data, modelUsed: currentModel }; // Success!
+                            return { data, modelUsed: currentModel };
 
                         } catch (err) {
                             const msg = err.message || "Network/Fetch Error";
@@ -362,11 +379,65 @@
                     }
                 }
 
-                // If we get here, all failed.
                 const finalMsg = "Unable to generate response. All models failed:\n" + errorLog.join("\n");
                 console.error(finalMsg);
                 throw new Error(finalMsg);
             },
+
+            // DISCOVERY UTILITIES
+            Discovery: {
+                getQualityTiers: () => [
+                    'gemini-3.0-pro', 'gemini-3-pro', 'gemini-3.0-flash', 'gemini-3-flash',
+                    'gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.0-pro', 'gemini-2.0-flash',
+                    'gemma-3-27b', 'gemma-2-27b', 'gemini-1.5-pro', 'gemini-1.5-flash',
+                    'gemma-3-9b', 'gemma-2-9b', 'gemma-3-2b', 'gemma-2-2b'
+                ],
+                probeModel: async (modelId, apiKey) => {
+                    const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${apiKey}`;
+                    try {
+                        const res = await fetch(url, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ contents: [{ parts: [{ text: "ping" }] }] })
+                        });
+                        const data = await res.json();
+                        if (data.error) {
+                            const msg = data.error.message?.toLowerCase() || '';
+                            if (msg.includes('permission') || msg.includes('quota') || msg.includes('exhausted')) return { active: false };
+                        }
+                        if (data.candidates || data.promptFeedback) return { active: true };
+                        return { active: false };
+                    } catch (e) { return { active: false }; }
+                },
+                getAiRanking: async (judgeModelId, candidateList, apiKey) => {
+                    const prompt = `
+                        I have access to these Google AI models: [${candidateList.join(', ')}].
+                        Rank them from smartest (most complex reasoning/grading) to fastest (quick responses).
+                        Also provide a VERY BRIEF 1-sentence reason why the top model is #1.
+                        Output FORMAT: [ModelID1, ModelID2, ...] | Reason: YourReason
+                    `;
+                    const url = `https://generativelanguage.googleapis.com/v1beta/models/${judgeModelId}:generateContent?key=${apiKey}`;
+                    try {
+                        const res = await fetch(url, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+                        });
+                        const data = await res.json();
+                        const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+                        const rankMatch = text.match(/\[(.*?)\]/);
+                        const reasonMatch = text.split('| Reason:')[1] || "AI-Judged order based on internal benchmarks.";
+                        if (rankMatch) {
+                            const rankedArray = rankMatch[1].split(',').map(s => s.trim().replace(/['"]/g, ''));
+                            const cleanRanked = rankedArray.filter(name => candidateList.includes(name));
+                            const finalRanked = [...cleanRanked, ...candidateList.filter(name => !cleanRanked.includes(name))];
+                            return { ranked: finalRanked, reason: reasonMatch };
+                        }
+                        return null;
+                    } catch (e) { return null; }
+                }
+            },
+
 
             BatchAnalyzeResponses: async (transcript, questions, studentResponses) => {
                 const prompt = `
@@ -519,9 +590,9 @@
             const isDone = (num, type = 'Chapter') => {
                 const padded = num.toString().padStart(2, '0');
                 // Check multiple variations of the key
-                return !!(roadmapData[`${type} ${padded}`] || 
-                          roadmapData[`${type.toLowerCase()} ${padded}`] ||
-                          roadmapData[`${type} ${num}`]);
+                return !!(roadmapData[`${type} ${padded}`] ||
+                    roadmapData[`${type.toLowerCase()} ${padded}`] ||
+                    roadmapData[`${type} ${num}`]);
             };
 
             const chCount = Object.keys(roadmapData).filter(k => k.toLowerCase().includes('chapter') && roadmapData[k]).length;
@@ -534,14 +605,14 @@
                     </div>
 
                     <div className="section-header-v2">Weekly Q&A reports</div>
-                    
+
                     <div className="roadmap-row-v2">
                         <div className="label-column-v2">
                             <span className="label-small-v2">If you submit this number of</span>
                             <span className="label-large-v2">chapters &rarr;</span>
                         </div>
                         <div className="items-grid-v2">
-                            {[1,2,3,4,5,6,7,8,9,10,11,12,13].map(num => (
+                            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13].map(num => (
                                 <div key={num} className={`ch-box-v2 ${isDone(num) ? 'completed-v2' : ''}`}>
                                     {num}
                                     {isDone(num) && <span className="tickmark-v2">✓</span>}
@@ -556,7 +627,7 @@
                             <span className="label-large-v2">grade is &rarr;</span>
                         </div>
                         <div className="items-grid-v2">
-                            {[1,2,3,4,5,6,7,8,9,10,11,12,13].map(num => (
+                            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13].map(num => (
                                 <div key={num} className={`gr-circle-v2 ${num <= chCount ? 'completed-v2' : ''}`}>
                                     {chGrades[num]}
                                 </div>
@@ -600,6 +671,153 @@
             );
         };
 
+        const DiscoveryOverlay = ({ apiKeys, onComplete }) => {
+            const [status, setStatus] = React.useState('discovering'); // 'discovering', 'probing', 'judging', 'complete'
+            const [discovered, setDiscovered] = React.useState([]);
+            const [probedIndices, setProbedIndices] = React.useState({}); // { index: 'testing'|'active'|'restricted' }
+            const [activeModels, setActiveModels] = React.useState([]);
+            const [finalChain, setFinalChain] = React.useState([]);
+            const [verdict, setVerdict] = React.useState(null);
+            const [error, setError] = React.useState(null);
+            const listRef = React.useRef(null);
+
+            React.useEffect(() => {
+                const runDiscovery = async () => {
+                    if (!apiKeys || apiKeys.length === 0) {
+                        setError("No API Keys provided for discovery.");
+                        return;
+                    }
+                    const key = apiKeys[0].key; // Use primary key for judge/probe
+
+                    try {
+                        // 1. DISCOVER
+                        const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${key}`;
+                        const response = await fetch(url);
+                        const data = await response.json();
+                        const raw = data.models || [];
+                        const pruned = raw.filter(m => {
+                            const id = m.name.toLowerCase();
+                            return m.supportedGenerationMethods.includes('generateContent') && !id.includes('embedding') && !id.includes('aqa') && !id.includes('rag');
+                        });
+                        setDiscovered(pruned);
+                        setStatus('probing');
+
+                        // 2. PROBE
+                        const activeList = [];
+                        for (let i = 0; i < pruned.length; i++) {
+                            const id = pruned[i].name.split('/').pop();
+                            setProbedIndices(prev => ({ ...prev, [i]: 'testing' }));
+                            
+                            // Auto-scroll to the item being tested
+                            if (listRef.current && listRef.current.children[i]) {
+                                listRef.current.children[i].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                            }
+                            
+                            const res = await window.Core.Discovery.probeModel(id, key);
+                            if (res.active) {
+                                setProbedIndices(prev => ({ ...prev, [i]: 'active' }));
+                                activeList.push(id);
+                            } else {
+                                setProbedIndices(prev => ({ ...prev, [i]: 'restricted' }));
+                            }
+                        }
+
+                        if (activeList.length === 0) {
+                            setError("All discovered models are currently restricted (0/0 quota). Please check your Google AI account status.");
+                            return;
+                        }
+
+                        setActiveModels(activeList);
+                        setStatus('judging');
+
+                        // 3. JUDGE
+                        const judgeId = activeList.find(id => id.includes('pro')) || activeList[0];
+                        const ranking = await window.Core.Discovery.getAiRanking(judgeId, activeList, key);
+
+                        const finalOrder = ranking ? ranking.ranked : activeList;
+                        setFinalChain(finalOrder);
+                        setVerdict(ranking ? ranking.reason : "Ranked based on model family hierarchy.");
+
+                        // 4. PERSIST
+                        localStorage.setItem('iStudy_active_chain', JSON.stringify(finalOrder));
+                        localStorage.setItem('iStudy_judge_verdict', ranking ? ranking.reason : "");
+                        setStatus('complete');
+
+                    } catch (err) {
+                        console.error("Discovery Error:", err);
+                        setError("Connection failed. Check your internet or API key.");
+                    }
+                };
+
+                runDiscovery();
+            }, []);
+
+            if (error) {
+                return (
+                    <div className="discovery-overlay">
+                        <div className="discovery-modal" style={{ textAlign: 'center' }}>
+                            <div className="discovery-title" style={{ color: '#ef4444' }}>System Error</div>
+                            <p className="discovery-subtitle">{error}</p>
+                            <button className="discovery-btn" onClick={() => window.location.reload()}>Retry</button>
+                        </div>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="discovery-overlay">
+                    <div className="discovery-modal">
+                        <div className="discovery-title">Selecting AI Models</div>
+                        <p className="discovery-subtitle">
+                            {status === 'discovering' && "Finding latest Google AI models..."}
+                            {status === 'probing' && "Testing models. This may take a minute..."}
+                            {status === 'judging' && "Ranking models..."}
+                            {status === 'complete' && "System set!"}
+                        </p>
+
+                        <div className="discovery-list" ref={listRef}>
+                            {discovered.map((m, i) => {
+                                const id = m.name.split('/').pop();
+                                const probeStatus = probedIndices[i] || 'testing';
+                                return (
+                                    <div key={i} className="discovery-item" style={{ opacity: probeStatus === 'restricted' ? 0.4 : 1 }}>
+                                        <span>{id}</span>
+                                        <span className={`discovery-status ${probeStatus}`}>
+                                            {probeStatus === 'testing' && "Testing..."}
+                                            {probeStatus === 'active' && "✅ Active"}
+                                            {probeStatus === 'restricted' && "❌ Restricted"}
+                                        </span>
+                                    </div>
+                                );
+                            })}
+                        </div>
+
+                        {status === 'complete' && (
+                            <div className="final-chain-box">
+                                <div className="final-chain-header">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                                    Active Chain Verified
+                                </div>
+                                {finalChain.slice(0, 3).map((id, i) => (
+                                    <div key={i} className="final-chain-item">
+                                        <span>#{i + 1} <strong>{id}</strong></span>
+                                        <span style={{ fontSize: '0.65rem' }}>{i === 0 ? "Primary" : "Fallback"}</span>
+                                    </div>
+                                ))}
+                                {verdict && <div className="verdict-text"><strong>AI Verdict:</strong> {verdict}</div>}
+                            </div>
+                        )}
+
+                        {status === 'complete' && (
+                            <div className="discovery-footer">
+                                <button className="discovery-btn" onClick={() => onComplete(finalChain)}>Proceed to Class</button>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
         function App() {
             const [showSettings, setShowSettings] = React.useState(false);
             const [apiKey, setApiKey] = React.useState(''); // Legacy check
@@ -635,6 +853,10 @@
             const [isPendingUpload, setIsPendingUpload] = useState(false);
             const [isSubmitting, setIsSubmitting] = useState(false);
             const [isWaitingForBriefing, setIsWaitingForBriefing] = useState(false);
+
+            // Discovery States
+            const [isDiscovering, setIsDiscovering] = useState(false);
+            const [activeChain, setActiveChain] = useState([]);
 
             // Video Portal Verification States
             const [showVideoModal, setShowVideoModal] = useState(false);
@@ -749,33 +971,50 @@
                 }]);
             };
 
+            // Startup: Load existing chain if available
+            useEffect(() => {
+                const raw = localStorage.getItem('iStudy_active_chain');
+                if (raw) {
+                    try {
+                        const parsed = JSON.parse(raw);
+                        if (Array.isArray(parsed) && parsed.length > 0) setActiveChain(parsed);
+                    } catch (e) { }
+                }
+
+                // Load API Keys
+                const rawKeys = localStorage.getItem('google_api_key');
+                if (rawKeys) {
+                    try {
+                        const parsed = JSON.parse(rawKeys);
+                        setApiKeys(Array.isArray(parsed) ? parsed : [{ key: rawKeys, label: 'Default' }]);
+                    } catch (e) { }
+                }
+            }, []);
+
             const validateAndProceed = async () => {
                 setIsCheckingKey(true);
                 try {
-                    // Quick validation request
-                    const testModel = selectedModel || 'gemini-3-flash-preview';
+                    // Use the top discovered model or a safe fallback for the ping
+                    const testModel = activeChain[0] || selectedModel || 'gemini-1.5-flash';
                     await window.Core.GeminiRequest(testModel, "ping");
                     setIsCheckingKey(false);
 
-                    // Proceed with original logic
                     if (submission.student_email && roadmapData) {
                         fileInputRef.current.click();
                     } else {
                         setView('chat');
-                        // Version 1.5: Added starting disclaimer about mission and time requirements
-                        // Version 1.7: Updated version number and reflected decoupling of portals.
                         addMessage('system', null, 'mission_briefing');
                         setIsWaitingForBriefing(true);
                     }
                 } catch (err) {
                     setIsCheckingKey(false);
                     setView('chat');
-                    addMessage('system', "Your API key was rejected. Did you follow the instructions on the website? If you did, you may need to get a new API key with another account. You can update your API keys by clicking the ⚙️ icon in the top right corner.");
+                    addMessage('system', "Your API key was rejected or the connection timed out. Please verify your keys via the ⚙️ icon in the top right corner.");
                 }
             };
 
             const handleUploadClick = async () => {
-                if (isCheckingKey) return;
+                if (isCheckingKey || isDiscovering) return;
 
                 const raw = localStorage.getItem('google_api_key');
                 let currentKeys = [];
@@ -1471,38 +1710,9 @@ You are managing a "Critical Thinking Simulation" and have the intellect of a un
                 setTempKey('');
                 setExtraKeys([]);
 
-                // CLOSE MODAL IMMEDIATELY
+                // CLOSE MODAL AND START DISCOVERY
                 setShowSettings(false);
-
-                if (isPendingUpload) {
-                    setIsPendingUpload(false);
-                    await validateAndProceed();
-                } else {
-                    setIsCheckingKey(true);
-                    try {
-                        const testModel = selectedModel || 'gemini-3-flash-preview';
-                        await window.Core.GeminiRequest(testModel, "ping");
-                        setIsCheckingKey(false);
-
-                        let instructions = "You are all set.";
-                        if (view === 'landing') {
-                            instructions = "Please click the **'Upload weekly Q&A report'** button to begin.";
-                        } else if (view === 'chat') {
-                            if (!submission.student_email) {
-                                instructions = "Please **enter your student email** below to verify your enrollment.";
-                                setIsVerifyingEmail(true);
-                            } else if (isSystemLocked) {
-                                instructions = "Our app will now automatically attempt to retry your last request.";
-                            } else {
-                                instructions = "You can now continue your interaction below.";
-                            }
-                        }
-                        addMessage('system', `✅ **Key(s) added and verified!** ${instructions}`);
-                    } catch (err) {
-                        setIsCheckingKey(false);
-                        addMessage('system', "⚠️ **Verification Failed:** The key you just added was rejected by Google. Did you follow the instructions? Please click the ⚙️ icon to try again.");
-                    }
-                }
+                setIsDiscovering(true); // Trigger intelligence optimization after key save
 
                 // AUTO-RETRY if Locked
                 if (isSystemLocked && retryRequestRef.current) {
@@ -1777,16 +1987,16 @@ You are managing a "Critical Thinking Simulation" and have the intellect of a un
                                                                                 // 3. Then send the data to Google Sheets & Email
                                                                                 // Calculate standing grade (Chapters + Videos)
                                                                                 const gradesMap = { 1: 'F', 2: 'F', 3: 'F', 4: 'F', 5: 'D-', 6: 'D', 7: 'D+', 8: 'C-', 9: 'C', 10: 'C+', 11: 'B-', 12: 'B', 13: 'B+' };
-                                                                                
+
                                                                                 const padded = submission.chapter.toString().padStart(2, '0');
                                                                                 const isAlreadyDone = roadmapData && (roadmapData[`Chapter ${padded}`] || roadmapData[`chapter ${padded}`] || roadmapData[`Chapter ${submission.chapter}`]);
-                                                                                
+
                                                                                 let chCount = Object.keys(roadmapData || {}).filter(k => k.toLowerCase().includes('chapter') && roadmapData[k]).length;
                                                                                 if (!isAlreadyDone) chCount += 1;
                                                                                 if (chCount > 13) chCount = 13;
 
                                                                                 const vCount = Object.keys(roadmapData || {}).filter(k => k.toLowerCase().includes('video') && roadmapData[k]).length;
-                                                                                
+
                                                                                 let newGrade = gradesMap[chCount] || 'F';
                                                                                 if (vCount >= 10) newGrade = 'A+';
                                                                                 else if (vCount >= 8) newGrade = 'A';
@@ -1925,7 +2135,7 @@ You are managing a "Critical Thinking Simulation" and have the intellect of a un
                                     </div>
                                 </motion.div>
                             )}
-                             {view === 'completion' && (
+                            {view === 'completion' && (
                                 <motion.div
                                     key="completion"
                                     initial={{ opacity: 0 }}
@@ -1935,9 +2145,9 @@ You are managing a "Critical Thinking Simulation" and have the intellect of a un
                                     <div className="success-icon">✓</div>
                                     <h2>Chapter {submission.chapter} Complete!</h2>
                                     <p>
-                                        Your <strong>revised</strong> responses have been saved to your local machine, and Dr. Mora has been <strong>notified</strong>.
+                                        Your <strong>revised</strong> responses have been saved to your local machine.
                                     </p>
-                                    
+
                                     <div style={{ width: '100%', maxWidth: '600px', margin: '0 auto 40px auto', padding: '20px', background: '#f8fafc', borderRadius: '20px', border: '1px solid #e2e8f0' }}>
                                         <Roadmap roadmapData={roadmapData} />
                                     </div>
@@ -1997,9 +2207,18 @@ You are managing a "Critical Thinking Simulation" and have the intellect of a un
                                                     paddingRight: '0'
                                                 }}
                                             >
-                                                <option value="gemini-2.5-flash">Gemini 2.5 Flash (Best Quality)</option>
-                                                <option value="gemini-3-flash-preview">Gemini 3 Flash</option>
-                                                <option value="gemma-3-27b-it">Gemma 3 27b (High Quota)</option>
+                                                {activeChain.length > 0 ? (
+                                                    activeChain.map((id, idx) => (
+                                                        <option key={id} value={id}>
+                                                            {id} {idx === 0 ? '(Primary Engine)' : '(Active Backup)'}
+                                                        </option>
+                                                    ))
+                                                ) : (
+                                                    <>
+                                                        <option value="gemini-1.5-flash">Gemini 1.5 Flash (Auto-Detecting...)</option>
+                                                        <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+                                                    </>
+                                                )}
                                             </select>
                                         </div>
                                     </div>
@@ -2007,6 +2226,25 @@ You are managing a "Critical Thinking Simulation" and have the intellect of a un
                                     <button className="action-btn send-btn" onClick={handleSend} disabled={isProcessing}>➤</button>
                                 </div>
                             </div>
+                        )
+                    }
+                    {
+                        isDiscovering && (
+                            <DiscoveryOverlay
+                                apiKeys={apiKeys}
+                                onComplete={(newChain) => {
+                                    setActiveChain(newChain);
+                                    setIsDiscovering(false);
+                                    if (newChain.length > 0) {
+                                        setSelectedModel(newChain[0]);
+                                        localStorage.setItem('iStudy_preferred_model', newChain[0]);
+                                    }
+                                    if (isPendingUpload) {
+                                        setIsPendingUpload(false);
+                                        validateAndProceed();
+                                    }
+                                }}
+                            />
                         )
                     }
                     {
@@ -2019,13 +2257,13 @@ You are managing a "Critical Thinking Simulation" and have the intellect of a un
 
                                         {/* SAVED KEYS LIST */}
                                         {apiKeys.length > 0 && (
-                                            <div className="saved-keys-section" style={{ marginBottom: '15px', padding: '10px', background: '#f0f9ff', borderRadius: '6px', border: '1px solid #e0f2fe' }}>
-                                                <h4 style={{ margin: '0 0 8px 0', fontSize: '0.9em', color: '#0369a1' }}>Active Keys (Vault)</h4>
+                                            <div className="saved-keys-section" style={{ marginBottom: '15px', padding: '10px', background: '#f0f9ff', borderRadius: '12px', border: '1px solid #e0f2fe' }}>
+                                                <h4 style={{ margin: '0 0 10px 0', fontSize: '0.9em', color: '#0369a1' }}>Active Keys (Vault)</h4>
                                                 <div style={{ maxHeight: '100px', overflowY: 'auto' }}>
                                                     {apiKeys.map((k, i) => (
-                                                        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85em', padding: '4px 0', borderBottom: '1px solid #e0f2fe' }}>
+                                                        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85em', padding: '6px 0', borderBottom: '1px solid #e0f2fe' }}>
                                                             <span><strong>{k.label}</strong>: {k.key.substring(0, 8)}...</span>
-                                                            <span onClick={() => handleRemoveKey(i)} style={{ cursor: 'pointer', color: 'red', fontWeight: 'bold' }}>✕</span>
+                                                            <span onClick={() => handleRemoveKey(i)} style={{ cursor: 'pointer', color: '#ef4444', fontWeight: 'bold', padding: '0 5px' }}>✕</span>
                                                         </div>
                                                     ))}
                                                 </div>
@@ -2085,9 +2323,18 @@ You are managing a "Critical Thinking Simulation" and have the intellect of a un
                                         </div>
                                     </div>
 
-                                    <div className="modal-actions">
-                                        <button className="btn-secondary" onClick={() => { setShowSettings(false); setIsPendingUpload(false); }}>Cancel</button>
-                                        <button className="btn-primary" onClick={handleAddKeys}>Save Key</button>
+                                    <div className="modal-actions" style={{ justifyContent: 'space-between' }}>
+                                        <button
+                                            className="btn-optimize-link"
+                                            disabled={apiKeys.length === 0}
+                                            onClick={() => { setShowSettings(false); setIsDiscovering(true); }}
+                                        >
+                                            🔄 Refresh Models
+                                        </button>
+                                        <div style={{ display: 'flex', gap: '10px' }}>
+                                            <button className="btn-secondary" onClick={() => { setShowSettings(false); setIsPendingUpload(false); }}>Cancel</button>
+                                            <button className="btn-primary" onClick={handleAddKeys}>Save Key</button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>

@@ -2,7 +2,6 @@
  * iStudy Diagnostic Backend v2.8 - GEO302/SUST314
  */
 
-const PROF_EMAIL = "mora@hawaii.edu";
 
 function doPost(e) {
   try {
@@ -113,7 +112,7 @@ function registerCompletion(email, chapter, uniqueCode, reportContent, finalGrad
   const headers = dataValues[0].map(h => h.toString().trim());
 
   const emailIdx = headers.findIndex(h => h.toLowerCase().trim() === "email");
-  
+
   // Prioritize exact match for FinalGrade to avoid getting caught by "Grade 01", etc.
   let gradeIdx = headers.findIndex(h => h.toLowerCase().replace(/[^a-z0-9]/g, '') === "finalgrade");
   if (gradeIdx === -1) {
@@ -150,15 +149,14 @@ function registerCompletion(email, chapter, uniqueCode, reportContent, finalGrad
   let emailStatus = "pending";
   try {
     const subject = "GEO302/SUST314 Completion confirmation chapter " + chapter;
-    const body = "Attached is your report for chapter" + chapter + ". If you choose to take the final exam videos, this file attached should be your study source. If you did submit your Q&A report in IStudy honestly, this file attached has the best  resposes for you to study; further when delivering those videos you will be  asked to load these resports, so it is important that you keep a copy of the atatched file.";
+    const body = "Attached is your report for Chapter " + chapter + ". If you choose to take the final exam videos, this attached file should be your primary study source. If you submitted your Q&A report honestly, this report contains the best responses for your review. Furthermore, when submitting your final videos, you will be required to upload these reports, so please ensure you keep a copy of this file.";
     const blob = Utilities.newBlob(reportContent, "text/plain", "Report_Ch_" + padded + ".txt");
 
     MailApp.sendEmail({
       to: email,
       subject: subject,
-      body: body,
-      attachments: [blob],
-      cc: PROF_EMAIL
+      htmlBody: "<div style='font-family: Arial, sans-serif; font-size: 14px; color: #333; line-height: 1.5;'>" + body + "</div>",
+      attachments: [blob]
     });
     emailStatus = "sent";
   } catch (emailErr) {
@@ -183,7 +181,7 @@ function registerVideoPortfolio(email, finalGrade, videos) {
   const data = sheet.getDataRange().getValues();
   const headers = data[0].map(h => h.toString().trim());
   const emailIdx = headers.findIndex(h => h.toLowerCase().trim() === "email");
-  
+
   // Prioritize exact match for FinalGrade to avoid getting caught by "Grade 01", etc.
   let gradeIdx = headers.findIndex(h => h.toLowerCase().replace(/[^a-z0-9]/g, '') === "finalgrade");
   if (gradeIdx === -1) {
@@ -196,49 +194,34 @@ function registerVideoPortfolio(email, finalGrade, videos) {
   const rowIndex = data.findIndex(row => row[emailIdx] && row[emailIdx].toString().toLowerCase().trim() === email.toLowerCase().trim());
   if (rowIndex === -1) return response({ status: "error", message: "Student not found." });
 
-  const studentRow = data[rowIndex];
-  let verifiedCount = 0;
-
   videos.forEach(v => {
-    // 1. Verify Completion Code from Sheet
-    const padded = v.chapter.toString().padStart(2, '0');
-    const chColIdx = headers.findIndex(h => {
-      const clean = h.toLowerCase().replace(/[^a-z0-9]/g, '');
-      return clean === "chapter" + padded || clean === "chapter" + v.chapter.toString();
-    });
+    const chNum = parseInt(v.chapter.toString().replace(/[^0-9]/g, ''));
+    const padded = chNum.toString().padStart(2, '0');
     
-    if (chColIdx !== -1) {
-      const storedValue = studentRow[chColIdx];
-      if (!storedValue || storedValue.toString().trim() !== v.code.trim()) {
-        console.warn(`Code mismatch for ${email} Chapter ${v.chapter}. Provided: ${v.code}, Stored: ${storedValue}`);
-        return; // Skip this video if code is invalid
-      }
-    }
-
-    // 2. If valid or if chapter column not found (should be found), save URL
     const colIdx = headers.findIndex(h => {
       const clean = h.toLowerCase().replace(/[^a-z0-9]/g, '');
-      return clean === "video" + v.chapter || clean === "video" + padded;
+      // Robust matching for "Video 1", "Video 01", "Video Chapter 1", "VideoChapter01", "VideoCH02"
+      return clean === "video" + chNum || 
+             clean === "video" + padded ||
+             clean === "videochapter" + chNum ||
+             clean === "videochapter" + padded ||
+             clean === "videoch" + chNum || 
+             clean === "videoch" + padded;
     });
     
     if (colIdx !== -1) {
       sheet.getRange(rowIndex + 1, colIdx + 1).setValue(v.url);
-      verifiedCount++;
     }
   });
-
-  if (verifiedCount === 0 && videos.length > 0) {
-    return response({ status: "error", message: "Verification failed: None of the provided completion codes matched our records." });
-  }
 
   if (gradeIdx !== -1) sheet.getRange(rowIndex + 1, gradeIdx + 1).setValue(finalGrade);
 
   try {
+    const videoBody = "I received your exam videos. I will only contact you if any of your responses require correction. For now, your projected grade in the class is: " + finalGrade + ".";
     MailApp.sendEmail({
       to: email,
-      subject: "GEO302 Video Received",
-      body: "Grade: " + finalGrade,
-      cc: PROF_EMAIL
+      subject: "GEO302/SUST314 Final video exams received",
+      htmlBody: "<div style='font-family: Arial, sans-serif; font-size: 14px; color: #333; line-height: 1.5;'>" + videoBody + "</div>"
     });
   } catch (e) { }
 

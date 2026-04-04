@@ -445,81 +445,69 @@
             `;
         }).join('');
 
-        // Loop through and poke each model
-        for (let i = 0; i < pruned.length; i++) {
-            const modelId = pruned[i].name.split('/').pop();
-            const statusEl = document.getElementById(`status-${i}`);
-            const rowEl = document.getElementById(`model-row-${i}`);
-            
-            const res = await probeModel(modelId, key);
-            
-            if (res.active) {
-                statusEl.innerText = "✅ Active";
-                statusEl.className = "status-badge status-active";
-                activeModels.push(modelId);
-            } else {
-                statusEl.innerText = "❌ Restricted";
-                statusEl.className = "status-badge status-restricted";
-                rowEl.style.opacity = '0.35';
+            // Loop through and poke each model
+            for (let i = 0; i < pruned.length; i++) {
+                const modelId = pruned[i].name.split('/').pop();
+                const statusEl = document.getElementById(`status-${i}`);
+                const rowEl = document.getElementById(`model-row-${i}`);
+                
+                // Auto-scroll to the row being tested
+                rowEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                
+                const res = await probeModel(modelId, key);
+                
+                if (res.active) {
+                    statusEl.innerText = "✅ Active";
+                    statusEl.className = "status-badge status-active";
+                    activeModels.push(modelId);
+                } else {
+                    statusEl.innerText = "❌ Restricted";
+                    statusEl.className = "status-badge status-restricted";
+                    rowEl.style.opacity = '0.35';
+                }
+                
+                document.getElementById('exec-time').innerText = `${Math.round(performance.now() - startTime)}ms`;
             }
+
+            if (activeModels.length === 0) throw new Error("No active models found.");
+
+            // Meta-Judge Phase
+            const judgeModelId = activeModels.find(id => id.includes('pro')) || activeModels[0];
             
-            document.getElementById('exec-time').innerText = `${Math.round(performance.now() - startTime)}ms`;
+            verdictBox.style.display = 'block';
+            verdictText.innerText = `Calling Judge [${judgeModelId}] to rank the active chain...`;
+
+            const aiVerdictResult = await getAiRanking(judgeModelId, activeModels, key);
+            const finalRank = aiVerdictResult ? aiVerdictResult.ranked : activeModels;
+            const reason = aiVerdictResult ? aiVerdictResult.reason : "Ranked based on model family hierarchy.";
+
+            // Final Render
+            finalChainEl.style.display = 'block';
+            activeItemsEl.innerHTML = finalRank.map((id, i) => `
+                <div class="chain-item">
+                    <div><span style="color:#38bdf8; font-weight:800; margin-right:15px;">#${i + 1}</span><strong>${id}</strong></div>
+                    <span style="font-size:0.75rem; color:#7dd3fc; opacity:0.8;">${i === 0 ? "Primary Engine" : "Backup Chain"}</span>
+                </div>
+            `).join('');
+            
+            verdictText.innerHTML = `<strong>Judge ${judgeModelId} says:</strong> ${reason}`;
+
+        } catch (err) {
+            rankedListEl.innerHTML = `<div style="padding: 40px; text-align: center; color:#ef4444;">Error: ${err.message}</div>`;
         }
+    });
 
-        if (activeModels.length === 0) throw new Error("No active models found.");
-
-        // Meta-Judge Phase
-        // Use the highest-tier pre-defined model that is also active to judge the rest.
-        // We look for 'pro' first, then 'flash'.
-        const judgeModelId = activeModels.find(id => id.includes('pro')) || activeModels[0];
-        
-        verdictBox.style.display = 'block';
-        verdictText.innerText = `Calling Judge [${judgeModelId}] to rank the active chain...`;
-
-        const aiVerdictResult = await getAiRanking(judgeModelId, activeModels, key);
-        const finalRank = aiVerdictResult ? aiVerdictResult.ranked : activeModels;
-        const reason = aiVerdictResult ? aiVerdictResult.reason : "Ranked based on model family hierarchy.";
-
-        // Final Render
-        finalChainEl.style.display = 'block';
-        activeItemsEl.innerHTML = finalRank.map((id, i) => `
-            <div class="chain-item">
-                <div><span style="color:#38bdf8; font-weight:800; margin-right:15px;">#${i + 1}</span><strong>${id}</strong></div>
-                <span style="font-size:0.75rem; color:#7dd3fc; opacity:0.8;">${i === 0 ? "Primary Engine" : "Backup Chain"}</span>
-            </div>
-        `).join('');
-        
-        verdictText.innerHTML = `<strong>Judge ${judgeModelId} says:</strong> ${reason}`;
-
-    } catch (err) {
-        rankedListEl.innerHTML = `<div style="padding: 40px; text-align: center; color:#ef4444;">Error: ${err.message}</div>`;
+    // Auto-load key from localStorage if it exists
+    const savedRaw = localStorage.getItem('google_api_key');
+    if (savedRaw) {
+        try {
+            const parsed = JSON.parse(savedRaw);
+            const firstKey = Array.isArray(parsed) ? (parsed[0]?.key || parsed[0]) : (typeof parsed === 'object' ? parsed.key : parsed);
+            if (firstKey) document.getElementById('api-key').value = firstKey;
+        } catch(e) {
+            document.getElementById('api-key').value = savedRaw;
+        }
     }
-});
-
-        // Load existing key
-        const savedRaw = localStorage.getItem('google_api_key');
-        if (savedRaw) {
-            try {
-                const parsed = JSON.parse(savedRaw);
-                const firstKey = Array.isArray(parsed) ? parsed[0]?.key : (typeof parsed === 'string' ? parsed : null);
-                if (firstKey) document.getElementById('api-key').value = firstKey;
-            } catch(e) {}
-        }
-    </script>
-</body>
-</html>
-
-        // Auto-load key from localStorage if it exists to save time for you
-        const savedRaw = localStorage.getItem('google_api_key');
-        if (savedRaw) {
-            try {
-                const parsed = JSON.parse(savedRaw);
-                const firstKey = Array.isArray(parsed) ? parsed[0]?.key : (typeof parsed === 'string' ? parsed : null);
-                if (firstKey) document.getElementById('api-key').value = firstKey;
-            } catch(e) {
-                document.getElementById('api-key').value = savedRaw;
-            }
-        }
-    </script>
+</script>
 </body>
 </html>
