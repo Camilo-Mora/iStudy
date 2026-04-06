@@ -2018,8 +2018,7 @@ You are managing a "Critical Thinking Simulation" and have the intellect of a un
                                                                                         [`Chapter ${padded}`]: true
                                                                                     }));
 
-                                                                                    addMessage('system', "✅ **Submission Successful!** Your report has been registered and your final grade in the spreadsheet has been updated.");
-                                                                                    setTimeout(() => setView('completion'), 2000);
+                                                                                    setView('completion');
                                                                                 } else {
                                                                                     addMessage('system', "❌ **Submission Failed:** " + (res.message || "Unknown error connecting to Google Sheets."));
                                                                                 }

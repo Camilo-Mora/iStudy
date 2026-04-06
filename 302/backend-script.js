@@ -154,14 +154,29 @@ function registerCompletion(email, chapter, uniqueCode, reportContent, finalGrad
   // 3. Send Email (Switch to MailApp for consistency)
   let emailStatus = "pending";
   try {
-    const subject = "GEO302/SUST314 Completion confirmation chapter " + chapter;
-    const body = "Attached is your report for Chapter " + chapter + ". If you choose to take the final exam videos, this attached file should be your primary study source. If you submitted your Q&A report honestly, this report contains the best responses for your review. Furthermore, when submitting your final videos, you will be required to upload these reports, so please ensure you keep a copy of this file.";
+    const subject = "GEO302/SUST314 | Chapter " + chapter + " Report Attached";
+
+    const htmlBody =
+      "<div style=\"font-family: Arial, sans-serif; font-size: 15px; color: #333; line-height: 1.6;\">" +
+      "<p>Attached is your Chapter " + chapter + " report.</p>" +
+
+      "<p>This document attached is your <strong>Primary Study Source</strong> for the final exam, if you choose to take it.</p>" +
+
+      "<p><strong>Note on Integrity:</strong> If you have submitted your Q&A session <strong>honestly</strong>, this report contains your best, most polished responses. If you rushed the process, your study resource for the final will be compromised.</p>" +
+
+      "<p>Furthermore, If you choose to take the final video exams, you will be required to upload these files, so please ensure you keep a copy of this file.</p>" +
+
+      "<p style=\"margin-top: 30px; font-size: 13px; color: #777;\">" +
+      "iStudy Diagnostic System" +
+      "</p>" +
+      "</div>";
+
     const blob = Utilities.newBlob(reportContent, "text/plain", "Report_Ch_" + padded + ".txt");
 
     MailApp.sendEmail({
       to: email,
       subject: subject,
-      htmlBody: "<div style='font-family: Arial, sans-serif; font-size: 14px; color: #333; line-height: 1.5;'>" + body + "</div>",
+      htmlBody: htmlBody,
       attachments: [blob]
     });
     emailStatus = "sent";
@@ -203,18 +218,18 @@ function registerVideoPortfolio(email, finalGrade, videos) {
   videos.forEach(v => {
     const chNum = parseInt(v.chapter.toString().replace(/[^0-9]/g, ''));
     const padded = chNum.toString().padStart(2, '0');
-    
+
     const colIdx = headers.findIndex(h => {
       const clean = h.toLowerCase().replace(/[^a-z0-9]/g, '');
       // Robust matching for "Video 1", "Video 01", "Video Chapter 1", "VideoChapter01", "VideoCH02"
-      return clean === "video" + chNum || 
-             clean === "video" + padded ||
-             clean === "videochapter" + chNum ||
-             clean === "videochapter" + padded ||
-             clean === "videoch" + chNum || 
-             clean === "videoch" + padded;
+      return clean === "video" + chNum ||
+        clean === "video" + padded ||
+        clean === "videochapter" + chNum ||
+        clean === "videochapter" + padded ||
+        clean === "videoch" + chNum ||
+        clean === "videoch" + padded;
     });
-    
+
     if (colIdx !== -1) {
       sheet.getRange(rowIndex + 1, colIdx + 1).setFormula('=HYPERLINK("' + v.url + '", "✓")').setNote(v.url);
     }
