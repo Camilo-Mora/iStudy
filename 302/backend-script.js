@@ -86,20 +86,26 @@ function verifyOTP(email, otp) {
 
 function getCompletionStatus(ss, email) {
   const sheet = ss.getSheetByName("Students") || ss.getSheets()[0];
-  const data = sheet.getDataRange().getValues();
+  const range = sheet.getDataRange();
+  const data = range.getValues();
+  const notes = range.getNotes();
   const headers = data[0].map(h => h.toString().trim());
   const emailIdx = headers.findIndex(h => h.toLowerCase().trim() === "email");
 
   if (emailIdx === -1) return {};
 
-  const row = data.find(r => r[emailIdx] && r[emailIdx].toString().toLowerCase().trim() === email.toLowerCase().trim());
-  if (!row) return {};
+  const rowIndex = data.findIndex(r => r[emailIdx] && r[emailIdx].toString().toLowerCase().trim() === email.toLowerCase().trim());
+  if (rowIndex === -1) return {};
+
+  const rowData = data[rowIndex];
+  const rowNotes = notes[rowIndex];
 
   const status = {};
   headers.forEach((h, i) => {
     const lowerH = h.toLowerCase();
     if (lowerH.includes("chapter") || lowerH.includes("video")) {
-      status[h] = row[i];
+      // Prioritize Note (hidden code/url) over Cell Value (✓/formula)
+      status[h] = rowNotes[i] || rowData[i];
     }
   });
   return status;
@@ -136,7 +142,7 @@ function registerCompletion(email, chapter, uniqueCode, reportContent, finalGrad
   if (chapterIdx === -1) return response({ status: "error", message: "Column not found for Chapter " + chapter + ". Headers found: " + headers.join(",") });
 
   // 1. Update unique code
-  sheet.getRange(rowIndex + 1, chapterIdx + 1).setValue(uniqueCode);
+  sheet.getRange(rowIndex + 1, chapterIdx + 1).setValue("✓").setNote(uniqueCode);
 
   // 2. Update Grade
   let gradeUpdateStatus = "skipped";
@@ -210,7 +216,16 @@ function registerVideoPortfolio(email, finalGrade, videos) {
     });
     
     if (colIdx !== -1) {
-      sheet.getRange(rowIndex + 1, colIdx + 1).setValue(v.url);
+      sheet.getRange(rowIndex + 1, colIdx + 1).setFormula('=HYPERLINK("' + v.url + '", "✓")').setNote(v.url);
+    }
+
+    // Also ensure the corresponding chapter code is a Note for consistency
+    const chapterIdx = headers.findIndex(h => {
+      const clean = h.toLowerCase().replace(/[^a-z0-9]/g, '');
+      return clean === "chapter" + chNum || clean === "chapter" + padded;
+    });
+    if (chapterIdx !== -1 && v.code) {
+      sheet.getRange(rowIndex + 1, chapterIdx + 1).setValue("✓").setNote(v.code);
     }
   });
 
