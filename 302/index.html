@@ -707,12 +707,12 @@
                         for (let i = 0; i < pruned.length; i++) {
                             const id = pruned[i].name.split('/').pop();
                             setProbedIndices(prev => ({ ...prev, [i]: 'testing' }));
-                            
+
                             // Auto-scroll to the item being tested
                             if (listRef.current && listRef.current.children[i]) {
                                 listRef.current.children[i].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
                             }
-                            
+
                             const res = await window.Core.Discovery.probeModel(id, key);
                             if (res.active) {
                                 setProbedIndices(prev => ({ ...prev, [i]: 'active' }));
@@ -770,7 +770,7 @@
                         <div className="discovery-title">Selecting AI Models</div>
                         <p className="discovery-subtitle">
                             {status === 'discovering' && "Finding latest Google AI models..."}
-                            {status === 'probing' && "Testing models. This may take a minute..."}
+                            {status === 'probing' && "Testing models. This is done only once but it may take a minute..."}
                             {status === 'judging' && "Ranking models..."}
                             {status === 'complete' && "System set!"}
                         </p>
@@ -2250,7 +2250,7 @@ You are managing a "Critical Thinking Simulation" and have the intellect of a un
                         showSettings && (
                             <div className="settings-overlay">
                                 <div className="settings-modal">
-                                    <h2>Google AI Settings</h2>
+                                    <h2>iStudy Settings</h2>
                                     <div className="modal-content">
                                         <p>This application requires a Google AI API key to function. Your key is stored locally in your browser and is never sent to our servers.</p>
 
@@ -2317,7 +2317,7 @@ You are managing a "Critical Thinking Simulation" and have the intellect of a un
                                                 <li style={{ marginBottom: '8px' }}>Paste that key here and click Save Key.</li>
                                             </ol>
                                             <p style={{ fontSize: '13px', color: 'var(--slate-600)', marginTop: '12px', fontStyle: 'italic' }}>
-                                                You can add multiple keys from different email accounts to avoid quota limits! Simply repeat steps 1 to 5 using different emails.
+                                                You need a Gmail account to get a Google AI API key; your UH email will not work. Gmail accounts from overseas may be restricted as well as those from a minor.
                                             </p>
                                         </div>
                                     </div>
