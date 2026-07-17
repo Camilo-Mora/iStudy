@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Check AI Model Connectivity</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        body { padding: 40px; background: #f0f2f5; font-family: 'Inter', sans-serif; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 24px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
+        .input-group { margin-bottom: 20px; }
+        input[type="password"] { width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 16px; margin-top: 8px; box-sizing: border-box; }
+        .btn { padding: 12px 24px; background: #2563eb; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 16px; }
+        .btn:hover:not(:disabled) { background: #1d4ed8; }
+        .btn:disabled { background: #94a3b8; cursor: not-allowed; opacity: 0.7; }
+        .result-box { margin-top: 24px; }
+        .error { color: #dc2626; padding: 16px; background: #fef2f2; border-radius: 8px; margin-top: 16px; border: 1px solid #fca5a5; }
+        .success { color: #16a34a; font-weight: bold; margin-bottom: 16px; }
+        .progress-log { max-height: 200px; overflow-y: auto; background: #1e293b; color: #38bdf8; padding: 12px; border-radius: 8px; font-family: monospace; font-size: 13px; margin-bottom: 20px; line-height: 1.5; }
+        .log-error { color: #f87171; }
+        .log-success { color: #4ade80; }
+        select { width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 16px; margin-top: 8px; background-color: white; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        const getModelId = (name) => name.replace('models/', '');
+
+        function App() {
+            const getInitialKey = () => {
+                const raw = localStorage.getItem('google_api_key');
+                if (!raw) return '';
+                try {
+                    const parsed = JSON.parse(raw);
+                    if (Array.isArray(parsed) && parsed.length > 0) return parsed[0].key;
+                } catch (e) {
+                    return raw.replace(/['"]+/g, '');
+                }
+                return raw;
+            };
+
+            const [apiKey, setApiKey] = useState(getInitialKey());
+            const [loading, setLoading] = useState(false);
+            const [error, setError] = useState('');
+            const [logs, setLogs] = useState([]);
+            const [workingModels, setWorkingModels] = useState([]);
+            const [selectedModel, setSelectedModel] = useState('');
+            
+            const logContainerRef = useRef(null);
+
+            const addLog = (msg, type = 'info') => {
+                setLogs(prev => [...prev, { text: msg, type }]);
+            };
+
+            // Auto-scroll logs
+            useEffect(() => {
+                if (logContainerRef.current) {
+                    logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
+                }
+            }, [logs]);
+
+            const pingModel = async (modelId) => {
+                try {
+                    const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${apiKey.trim()}`;
+                    const prompt = "ping";
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+                    });
+                    const data = await response.json();
+                    
+                    if (!response.ok || data.error) {
+                        return { success: false, error: data.error?.message || `HTTP ${response.status}` };
+                    }
+                    return { success: true };
+                } catch (err) {
+                    return { success: false, error: err.message };
+                }
+            };
+
+            const startCheck = async () => {
+                if (!apiKey.trim()) {
+                    setError('Please enter a Google API Key.');
+                    return;
+                }
+                
+                setLoading(true);
+                setError('');
+                setLogs([]);
+                setWorkingModels([]);
+                setSelectedModel('');
+
+                try {
+                    addLog("Fetching available models from Google...");
+                    const listUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey.trim()}`;
+                    const response = await fetch(listUrl);
+                    const data = await response.json();
+
+                    if (data.error) {
+                        throw new Error(data.error.message || "Failed to authenticate.");
+                    }
+
+                    if (!data.models) {
+                        throw new Error("No models found.");
+                    }
+
+                    let candidates = data.models
+                        .filter(m => m.supportedGenerationMethods && m.supportedGenerationMethods.includes('generateContent'))
+                        .map(m => getModelId(m.name));
+                    
+                    // Prepend the old hardcoded models just to be 100% sure we test them if they exist
+                    const istudyModels = ['gemini-3-flash-preview', 'gemini-2.5-flash', 'gemma-3-27b-it'];
+                    istudyModels.reverse().forEach(m => {
+                        if (!candidates.includes(m)) candidates.unshift(m);
+                    });
+
+                    addLog(`Found ${candidates.length} candidate models. Starting ping tests...`);
+
+                    const functional = [];
+
+                    // Test sequentially to avoid Rate Limits (429 Too Many Requests)
+                    for (let i = 0; i < candidates.length; i++) {
+                        const mId = candidates[i];
+                        addLog(`[${i+1}/${candidates.length}] Pinging ${mId}...`);
+                        
+                        const result = await pingModel(mId);
+                        
+                        if (result.success) {
+                            addLog(`SUCCESS: ${mId} is fully operational!`, 'success');
+                            functional.push(mId);
+                            setWorkingModels([...functional]); // update UI incrementally
+                            if (!selectedModel && functional.length === 1) setSelectedModel(mId);
+                        } else {
+                            addLog(`FAILED: ${mId} - ${result.error}`, 'error');
+                        }
+                        
+                        // Add a tiny delay between requests to be safe with quotas
+                        await new Promise(res => setTimeout(res, 500));
+                    }
+
+                    addLog(`Finished! Found ${functional.length} functional models.`, 'success');
+
+                } catch (err) {
+                    setError(err.message || "An error occurred.");
+                    addLog(`Process stopped due to error: ${err.message}`, 'error');
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            return (
+                <div className="container">
+                    <h1 style={{marginTop: 0, color: '#0f172a'}}>Auto-Detect Operational Models</h1>
+                    <p style={{color: '#475569'}}>Paste your API Key. We will fetch all models and ping them one by one. Only the ones that successfully respond will be added to the dropdown.</p>
+                    
+                    <div className="input-group">
+                        <label style={{fontWeight: 'bold', color: '#1e293b'}}>Google API Key</label>
+                        <input 
+                            type="password" 
+                            value={apiKey} 
+                            onChange={e => setApiKey(e.target.value)} 
+                            placeholder="AIzaSy..." 
+                        />
+                    </div>
+                    
+                    <button 
+                        className="btn" 
+                        onClick={startCheck} 
+                        disabled={loading}
+                    >
+                        {loading ? 'Running Tests...' : 'Start Model Detection'}
+                    </button>
+
+                    {error && (
+                        <div className="error">
+                            <strong>Error:</strong> {error}
+                        </div>
+                    )}
+
+                    {(logs.length > 0) && (
+                        <div className="result-box">
+                            <h3 style={{marginBottom: '10px'}}>Testing Log</h3>
+                            <div className="progress-log" ref={logContainerRef}>
+                                {logs.map((log, idx) => (
+                                    <div key={idx} className={log.type === 'error' ? 'log-error' : log.type === 'success' ? 'log-success' : ''}>
+                                        {log.text}
+                                    </div>
+                                ))}
+                            </div>
+                            
+                            {workingModels.length > 0 && (
+                                <div style={{ background: '#e0e7ff', padding: '16px', borderRadius: '8px', border: '1px solid #c7d2fe' }}>
+                                    <h3 style={{marginTop: 0, color: '#3730a3'}}>Operational Models Select</h3>
+                                    <p style={{fontSize: '14px', color: '#4338ca'}}>These models successfully responded to the ping and are safe to use.</p>
+                                    <select value={selectedModel} onChange={e => setSelectedModel(e.target.value)}>
+                                        {workingModels.map(m => (
+                                            <option key={m} value={m}>{m}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
+                            
+                            {!loading && workingModels.length === 0 && (
+                                <div className="error">
+                                    No operational models found for this API key.
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>

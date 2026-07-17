@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>iStudy 1.8 - Student Essay Review System</title>
+    <title>iStudy 1.7 - Student Essay Review System</title>
     <link rel="stylesheet" href="styles.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1849,7 +1849,7 @@ You are managing a "Critical Thinking Simulation" and have the intellect of a un
             return (
                 <div className="app-root">
                     <header>
-                        <div className="logo">IStudy <span style={{ fontSize: '0.5em', opacity: 0.6, verticalAlign: 'middle', fontWeight: 'normal' }}>1.8</span></div>
+                        <div className="logo">IStudy <span style={{ fontSize: '0.5em', opacity: 0.6, verticalAlign: 'middle', fontWeight: 'normal' }}>1.7</span></div>
                         <div className="settings-icon" onClick={() => setShowSettings(true)}>
                             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                 <circle cx="12" cy="12" r="3"></circle>
@@ -2140,27 +2140,22 @@ You are managing a "Critical Thinking Simulation" and have the intellect of a un
                                     initial={{ opacity: 0 }}
                                     animate={{ opacity: 1 }}
                                     className="completion-overlay active"
-                                    style={{ display: 'flex', flexDirection: 'column', height: '100vh', padding: '20px', boxSizing: 'border-box' }}
                                 >
-                                    <div style={{ flexGrow: 1, overflowY: 'auto', paddingBottom: '20px', width: '100%' }}>
-                                        <div className="success-icon">✓</div>
-                                        <h2>Chapter {submission.chapter} Complete!</h2>
-                                        <p>
-                                            Your <strong>revised</strong> responses have been saved to your local machine.
-                                        </p>
+                                    <div className="success-icon">✓</div>
+                                    <h2>Chapter {submission.chapter} Complete!</h2>
+                                    <p>
+                                        Your <strong>revised</strong> responses have been saved to your local machine.
+                                    </p>
 
-                                        <div style={{ width: '100%', maxWidth: '600px', margin: '0 auto', padding: '20px', background: '#f8fafc', borderRadius: '20px', border: '1px solid #e2e8f0' }}>
-                                            <Roadmap roadmapData={roadmapData} />
-                                        </div>
+                                    <div style={{ width: '100%', maxWidth: '600px', margin: '0 auto 40px auto', padding: '20px', background: '#f8fafc', borderRadius: '20px', border: '1px solid #e2e8f0' }}>
+                                        <Roadmap roadmapData={roadmapData} />
                                     </div>
 
-                                    <div style={{ flexShrink: 0, padding: '20px 0', width: '100%', display: 'flex', justifyContent: 'center' }}>
-                                        <button className="btn-primary" onClick={() => window.location.reload()}>
-                                            Close App
-                                        </button>
-                                    </div>
+                                    <button className="btn-primary" onClick={() => window.location.reload()}>
+                                        Close App
+                                    </button>
                                 </motion.div>
-                            )}}
+                            )}
                         </AnimatePresence>
                     </main>
                     <input type="file" id="fileInput" ref={fileInputRef} style={{ display: 'none' }} onChange={handleFileChange} accept="image/*,.txt,.md" />
