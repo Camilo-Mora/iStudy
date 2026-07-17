@@ -2140,25 +2140,21 @@ You are managing a "Critical Thinking Simulation" and have the intellect of a un
                                     initial={{ opacity: 0 }}
                                     animate={{ opacity: 1 }}
                                     className="completion-overlay active"
-                                    style={{ display: 'flex', flexDirection: 'column', height: '100vh', padding: '20px', boxSizing: 'border-box' }}
+                                    style={{ overflowY: 'auto', maxHeight: '100vh', padding: '20px', boxSizing: 'border-box' }}
                                 >
-                                    <div style={{ flexGrow: 1, overflowY: 'auto', paddingBottom: '20px', width: '100%' }}>
-                                        <div className="success-icon">✓</div>
-                                        <h2>Chapter {submission.chapter} Complete!</h2>
-                                        <p>
-                                            Your <strong>revised</strong> responses have been saved to your local machine.
-                                        </p>
+                                    <div className="success-icon">✓</div>
+                                    <h2>Chapter {submission.chapter} Complete!</h2>
+                                    <p>
+                                        Your <strong>revised</strong> responses have been saved to your local machine.
+                                    </p>
 
-                                        <div style={{ width: '100%', maxWidth: '600px', margin: '0 auto', padding: '20px', background: '#f8fafc', borderRadius: '20px', border: '1px solid #e2e8f0' }}>
-                                            <Roadmap roadmapData={roadmapData} />
-                                        </div>
+                                    <div style={{ width: '100%', maxWidth: '600px', margin: '0 auto 40px auto', padding: '20px', background: '#f8fafc', borderRadius: '20px', border: '1px solid #e2e8f0' }}>
+                                        <Roadmap roadmapData={roadmapData} />
                                     </div>
 
-                                    <div style={{ flexShrink: 0, padding: '20px 0', width: '100%', display: 'flex', justifyContent: 'center' }}>
-                                        <button className="btn-primary" onClick={() => window.location.reload()}>
-                                            Close App
-                                        </button>
-                                    </div>
+                                    <button className="btn-primary" onClick={() => window.location.reload()}>
+                                        Close App
+                                    </button>
                                 </motion.div>
                             )}
                         </AnimatePresence>
