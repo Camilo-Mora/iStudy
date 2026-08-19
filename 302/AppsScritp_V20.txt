@@ -18,11 +18,68 @@ function doPost(e) {
       return registerCompletion(data.email, data.chapter, data.uniqueCode, data.reportContent, data.finalGrade);
     } else if (action === "registerVideoPortfolio") {
       return registerVideoPortfolio(data.email, data.finalGrade, data.videos);
+    } else if (action === "proxyGemini") {
+      return proxyGemini(data.model, data.promptText);
     }
 
     return response({ status: "error", message: "Invalid action: " + action });
   } catch (err) {
     return response({ status: "error", message: "System Error: " + err.toString() });
+  }
+}
+
+/**
+ * Proxies an AI generateContent request server-side using the instructor's
+ * API key stored in cell A1 of the "API_Key" sheet. The key is never sent to
+ * the student's browser.
+ */
+function proxyGemini(model, promptText) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    
+    // Robust sheet lookup: checks for "API_Key", "API Key", "API_KEY", "api_key", "ApiKey"
+    const allSheets = ss.getSheets();
+    const apiKeySheet = allSheets.find(s => {
+      const name = s.getName().toLowerCase().replace(/[^a-z0-9]/g, '');
+      return name === "apikey" || name.includes("apikey");
+    }) || ss.getSheetByName("API_Key");
+
+    if (!apiKeySheet) {
+      return response({ error: { message: "API_Key sheet not found in spreadsheet. Found sheets: " + allSheets.map(s => s.getName()).join(", ") } });
+    }
+
+    const apiKey = apiKeySheet.getRange("A1").getValue().toString().trim();
+    if (!apiKey || apiKey.length < 10) {
+      return response({ error: { message: "API key in cell A1 of sheet '" + apiKeySheet.getName() + "' is empty or invalid." } });
+    }
+
+    const targetModel = model || "gemma-4-26b-a4b-it";
+    const cleanModel = targetModel.includes('/') ? targetModel : ("models/" + targetModel);
+    const url = "https://generativelanguage.googleapis.com/v1beta/" + cleanModel + ":generateContent?key=" + apiKey;
+
+    const payload = {
+      contents: [{ parts: [{ text: promptText }] }],
+      safetySettings: [
+        { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
+        { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+        { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+        { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
+      ]
+    };
+
+    const options = {
+      method: "post",
+      contentType: "application/json",
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true
+    };
+
+    const res = UrlFetchApp.fetch(url, options);
+    const json = JSON.parse(res.getContentText());
+    return ContentService.createTextOutput(JSON.stringify(json))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return response({ error: { message: "proxyGemini error: " + err.toString() } });
   }
 }
 

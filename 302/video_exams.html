@@ -88,7 +88,7 @@
         // Core and Fetch Logic
         window.Core = window.Core || {
             VerifyStudentEmail: async (email) => {
-                const scriptUrl = 'https://script.google.com/macros/s/AKfycbzfZqALbx-cwWjqyme4ntrfB_F7gpywjmPXyZrIa_BZRf2JmpgsaT1TGrfrE_xsCPPT_A/exec';
+                const scriptUrl = 'https://script.google.com/macros/s/AKfycbz5z-WPUT6f5hNGzXVSwVnPtndmNCA_QLMegG4ZiPtmyCz2ctPF6XOkCrfOxXoe59JvTA/exec';
                 try {
                     const response = await fetch(scriptUrl, {
                         method: 'POST',
@@ -102,7 +102,7 @@
                 }
             },
             VerifyOTP: async (email, code) => {
-                const scriptUrl = 'https://script.google.com/macros/s/AKfycbzfZqALbx-cwWjqyme4ntrfB_F7gpywjmPXyZrIa_BZRf2JmpgsaT1TGrfrE_xsCPPT_A/exec';
+                const scriptUrl = 'https://script.google.com/macros/s/AKfycbz5z-WPUT6f5hNGzXVSwVnPtndmNCA_QLMegG4ZiPtmyCz2ctPF6XOkCrfOxXoe59JvTA/exec';
                 try {
                     const response = await fetch(scriptUrl, {
                         method: 'POST',
@@ -116,7 +116,7 @@
                 }
             },
             FetchRoadmapData: async (email) => {
-                const scriptUrl = 'https://script.google.com/macros/s/AKfycbzfZqALbx-cwWjqyme4ntrfB_F7gpywjmPXyZrIa_BZRf2JmpgsaT1TGrfrE_xsCPPT_A/exec';
+                const scriptUrl = 'https://script.google.com/macros/s/AKfycbz5z-WPUT6f5hNGzXVSwVnPtndmNCA_QLMegG4ZiPtmyCz2ctPF6XOkCrfOxXoe59JvTA/exec';
                 try {
                     const response = await fetch(scriptUrl, {
                         method: 'POST',
@@ -271,7 +271,7 @@
                 setFinalProjectedGrade(grade);
 
                 try {
-                    const VIDEO_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzfZqALbx-cwWjqyme4ntrfB_F7gpywjmPXyZrIa_BZRf2JmpgsaT1TGrfrE_xsCPPT_A/exec";
+                    const VIDEO_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz5z-WPUT6f5hNGzXVSwVnPtndmNCA_QLMegG4ZiPtmyCz2ctPF6XOkCrfOxXoe59JvTA/exec";
                     const payload = {
                         action: 'registerVideoPortfolio',
                         email: videoCheckEmail,

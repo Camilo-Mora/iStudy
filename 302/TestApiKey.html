@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>iStudy - AI Proxy Infrastructure Test</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background-color: #f1f5f9;
+            color: #1e293b;
+            padding: 30px 20px;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+        }
+
+        .container {
+            background: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            padding: 30px;
+            max-width: 720px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        h1 {
+            font-size: 1.4rem;
+            margin-top: 0;
+            color: #0f172a;
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 12px;
+        }
+
+        .section {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #475569;
+            margin-bottom: 6px;
+        }
+
+        input[type="text"], select, textarea {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            box-sizing: border-box;
+            background: #f8fafc;
+            font-family: inherit;
+        }
+
+        input[type="text"]:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: #3b82f6;
+            background: #ffffff;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        button {
+            background-color: #2563eb;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.15s;
+        }
+
+        button:hover {
+            background-color: #1d4ed8;
+        }
+
+        button:disabled {
+            background-color: #94a3b8;
+            cursor: not-allowed;
+        }
+
+        .status-box {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            line-height: 1.5;
+            display: none;
+        }
+
+        .status-success {
+            background-color: #ecfdf5;
+            border: 1px solid #a7f3d0;
+            color: #065f46;
+        }
+
+        .status-error {
+            background-color: #fef2f2;
+            border: 1px solid #fecaca;
+            color: #991b1b;
+        }
+
+        .status-loading {
+            background-color: #eff6ff;
+            border: 1px solid #bfdbfe;
+            color: #1e40af;
+        }
+
+        .log-box {
+            background: #0f172a;
+            color: #38bdf8;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.85rem;
+            padding: 15px;
+            border-radius: 8px;
+            overflow-x: auto;
+            max-height: 280px;
+            white-space: pre-wrap;
+            margin-top: 15px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 iStudy AI Infrastructure Test</h1>
+        <p style="font-size: 0.9rem; color: #64748b;">
+            This barebones tool sends a single test request to your Google Apps Script backend, which reads your API key from the Google Sheet (<code>API_Key!A1</code>) and queries the Gemini model.
+        </p>
+
+        <div class="section">
+            <label>Google Apps Script Web App URL</label>
+            <input type="text" id="scriptUrl" value="https://script.google.com/macros/s/AKfycbz5z-WPUT6f5hNGzXVSwVnPtndmNCA_QLMegG4ZiPtmyCz2ctPF6XOkCrfOxXoe59JvTA/exec" />
+        </div>
+
+        <div class="section">
+            <label>Target Model</label>
+            <select id="modelSelect">
+                <option value="gemma-4-26b-a4b-it">gemma-4-26b-a4b-it</option>
+                <option value="gemma-4-31b-it">gemma-4-31b-it</option>
+            </select>
+        </div>
+
+        <div class="section">
+            <label>Prompt</label>
+            <textarea id="promptInput" rows="3">what is the capital of Colombia. give me just a name as a response</textarea>
+        </div>
+
+        <div class="button-group">
+            <button id="sendBtn" onclick="sendTestRequest()">🚀 Send Test Request</button>
+        </div>
+
+        <div id="statusBox" class="status-box"></div>
+
+        <div id="logBox" class="log-box"></div>
+    </div>
+
+    <script>
+        async function sendTestRequest() {
+            const sendBtn = document.getElementById('sendBtn');
+            const statusBox = document.getElementById('statusBox');
+            const logBox = document.getElementById('logBox');
+            const scriptUrl = document.getElementById('scriptUrl').value.trim();
+            const model = document.getElementById('modelSelect').value;
+            const promptText = document.getElementById('promptInput').value.trim();
+
+            if (!scriptUrl) {
+                alert('Please enter your Google Apps Script URL.');
+                return;
+            }
+
+            // Reset UI
+            sendBtn.disabled = true;
+            statusBox.style.display = 'block';
+            statusBox.className = 'status-box status-loading';
+            statusBox.innerHTML = '⏳ <strong>Sending request to Apps Script...</strong><br>Apps Script will fetch the API key from <code>API_Key!A1</code> and query Google Gemini.';
+            logBox.style.display = 'none';
+            logBox.textContent = '';
+
+            const payload = {
+                action: 'proxyGemini',
+                model: model,
+                promptText: promptText
+            };
+
+            const startTime = performance.now();
+
+            try {
+                const response = await fetch(scriptUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain' },
+                    body: JSON.stringify(payload)
+                });
+
+                const rawText = await response.text();
+                const elapsed = ((performance.now() - startTime) / 1000).toFixed(2);
+
+                let data;
+                try {
+                    data = JSON.parse(rawText);
+                } catch (jsonErr) {
+                    statusBox.className = 'status-box status-error';
+                    statusBox.innerHTML = `❌ <strong>Apps Script did not return JSON.</strong> (${elapsed}s)<br>Possible causes: The Apps Script has an unhandled execution error or the URL is incorrect.`;
+                    logBox.style.display = 'block';
+                    logBox.textContent = "RAW RESPONSE:\n" + rawText;
+                    return;
+                }
+
+                // Check for errors returned by Apps Script or Gemini
+                if (data.status === 'error' || data.error) {
+                    const errorMsg = data.error?.message || data.message || JSON.stringify(data);
+                    statusBox.className = 'status-box status-error';
+                    statusBox.innerHTML = `❌ <strong>Error from Backend:</strong> (${elapsed}s)<br><br><code>${escapeHtml(errorMsg)}</code><br><br>` +
+                        `<strong>Troubleshooting Checklist:</strong><br>` +
+                        `1. Ensure the sheet tab is named exactly <code>API_Key</code>.<br>` +
+                        `2. Ensure cell <code>A1</code> contains your valid Google AI Studio API key.<br>` +
+                        `3. Ensure you redeployed Apps Script (<strong>Deploy &rarr; Manage Deployments &rarr; Edit &rarr; New Version</strong>).`;
+                    logBox.style.display = 'block';
+                    logBox.textContent = "FULL RESPONSE JSON:\n" + JSON.stringify(data, null, 2);
+                    return;
+                }
+
+                // Extract text from Gemini response structure
+                const candidate = data.candidates?.[0];
+                const parts = candidate?.content?.parts || [];
+                const responseText = parts.map(p => p.text || '').join('').trim();
+
+                if (responseText) {
+                    statusBox.className = 'status-box status-success';
+                    statusBox.innerHTML = `✅ <strong>Success! Response received in ${elapsed}s</strong><br><br>` +
+                        `<strong>AI Answer:</strong><br>` +
+                        `<div style="font-size: 1.25rem; font-weight: bold; margin-top: 8px; color: #047857;">${escapeHtml(responseText)}</div>`;
+                } else {
+                    statusBox.className = 'status-box status-error';
+                    statusBox.innerHTML = `⚠️ <strong>Model responded, but text was empty.</strong> (${elapsed}s)`;
+                }
+
+                logBox.style.display = 'block';
+                logBox.textContent = "FULL RESPONSE JSON FROM GEMINI:\n" + JSON.stringify(data, null, 2);
+
+            } catch (netErr) {
+                const elapsed = ((performance.now() - startTime) / 1000).toFixed(2);
+                statusBox.className = 'status-box status-error';
+                statusBox.innerHTML = `❌ <strong>Network / Connection Error:</strong> (${elapsed}s)<br>${escapeHtml(netErr.message || String(netErr))}<br><br>` +
+                    `Make sure the Google Apps Script Web App is deployed with <strong>Who has access: Anyone</strong>.`;
+                logBox.style.display = 'block';
+                logBox.textContent = "ERROR STACK:\n" + netErr.stack;
+            } finally {
+                sendBtn.disabled = false;
+            }
+        }
+
+        function escapeHtml(str) {
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+    </script>
+</body>
+</html>
