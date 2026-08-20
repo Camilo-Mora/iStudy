@@ -273,7 +273,7 @@
 
                 try {
                     // Read preference
-                    const preferredModel = localStorage.getItem('iStudy_preferred_model') || 'gemini-3-flash';
+                    const preferredModel = localStorage.getItem('iStudy_preferred_model') || 'gemma-4-26b-a4b-it';
                     const result = await window.Core.GeminiRequest(preferredModel, prompt);
                     const data = result.data;
 
@@ -302,10 +302,10 @@
                 // All AI calls are proxied through the Apps Script backend.
                 // The instructor's API key lives only in the Google Sheet (API_Key!A1)
                 // and is never sent to the student's browser.
-                const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzfZqALbx-cwWjqyme4ntrfB_F7gpywjmPXyZrIa_BZRf2JmpgsaT1TGrfrE_xsCPPT_A/exec';
+                const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz5z-WPUT6f5hNGzXVSwVnPtndmNCA_QLMegG4ZiPtmyCz2ctPF6XOkCrfOxXoe59JvTA/exec';
 
-                // 1. DYNAMIC CHAIN RESOLUTION
-                let targetModel = model || localStorage.getItem('iStudy_preferred_model') || 'gemini-1.5-flash';
+                // 1. DYNAMIC CHAIN RESOLUTION: Exclusively Gemma models
+                let targetModel = model || localStorage.getItem('iStudy_preferred_model') || 'gemma-4-26b-a4b-it';
 
                 let uniqueChain = [];
                 const savedChainRaw = localStorage.getItem('iStudy_active_chain');
@@ -317,7 +317,7 @@
                 if (savedChain.length > 0) {
                     uniqueChain = [targetModel, ...savedChain.filter(m => m !== targetModel)];
                 } else {
-                    uniqueChain = [targetModel, 'gemini-1.5-flash', 'gemini-1.5-pro'];
+                    uniqueChain = [targetModel, 'gemma-4-26b-a4b-it', 'gemma-4-31b-it'];
                 }
                 uniqueChain = [...new Set(uniqueChain)];
 
@@ -376,13 +376,10 @@
             // DISCOVERY UTILITIES
             Discovery: {
                 getQualityTiers: () => [
-                    'gemini-3.0-pro', 'gemini-3-pro', 'gemini-3.0-flash', 'gemini-3-flash',
-                    'gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.0-pro', 'gemini-2.0-flash',
-                    'gemma-3-27b', 'gemma-2-27b', 'gemini-1.5-pro', 'gemini-1.5-flash',
-                    'gemma-3-9b', 'gemma-2-9b', 'gemma-3-2b', 'gemma-2-2b'
+                    'gemma-4-26b-a4b-it', 'gemma-4-31b-it'
                 ],
                 probeModel: async (modelId) => {
-                    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzfZqALbx-cwWjqyme4ntrfB_F7gpywjmPXyZrIa_BZRf2JmpgsaT1TGrfrE_xsCPPT_A/exec';
+                    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz5z-WPUT6f5hNGzXVSwVnPtndmNCA_QLMegG4ZiPtmyCz2ctPF6XOkCrfOxXoe59JvTA/exec';
                     try {
                         const res = await fetch(APPS_SCRIPT_URL, {
                             method: 'POST',
@@ -405,7 +402,7 @@
                         Also provide a VERY BRIEF 1-sentence reason why the top model is #1.
                         Output FORMAT: [ModelID1, ModelID2, ...] | Reason: YourReason
                     `;
-                    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzfZqALbx-cwWjqyme4ntrfB_F7gpywjmPXyZrIa_BZRf2JmpgsaT1TGrfrE_xsCPPT_A/exec';
+                    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz5z-WPUT6f5hNGzXVSwVnPtndmNCA_QLMegG4ZiPtmyCz2ctPF6XOkCrfOxXoe59JvTA/exec';
                     try {
                         const res = await fetch(APPS_SCRIPT_URL, {
                             method: 'POST',
@@ -453,7 +450,7 @@
 
                 try {
                     // Use user preference for batch analysis too
-                    const preferredModel = localStorage.getItem('iStudy_preferred_model') || 'gemini-3-flash';
+                    const preferredModel = localStorage.getItem('iStudy_preferred_model') || 'gemma-4-26b-a4b-it';
                     const result = await window.Core.GeminiRequest(preferredModel, prompt);
                     const data = result.data;
                     const text = window.Core.CleanResponseText(data);
@@ -475,7 +472,7 @@
                 }
             },
             VerifyStudentEmail: async (email) => {
-                const scriptUrl = 'https://script.google.com/macros/s/AKfycbzfZqALbx-cwWjqyme4ntrfB_F7gpywjmPXyZrIa_BZRf2JmpgsaT1TGrfrE_xsCPPT_A/exec';
+                const scriptUrl = 'https://script.google.com/macros/s/AKfycbz5z-WPUT6f5hNGzXVSwVnPtndmNCA_QLMegG4ZiPtmyCz2ctPF6XOkCrfOxXoe59JvTA/exec';
                 try {
                     const response = await fetch(scriptUrl, {
                         method: 'POST',
@@ -490,7 +487,7 @@
                 }
             },
             VerifyOTP: async (email, code) => {
-                const scriptUrl = 'https://script.google.com/macros/s/AKfycbzfZqALbx-cwWjqyme4ntrfB_F7gpywjmPXyZrIa_BZRf2JmpgsaT1TGrfrE_xsCPPT_A/exec';
+                const scriptUrl = 'https://script.google.com/macros/s/AKfycbz5z-WPUT6f5hNGzXVSwVnPtndmNCA_QLMegG4ZiPtmyCz2ctPF6XOkCrfOxXoe59JvTA/exec';
                 try {
                     const response = await fetch(scriptUrl, {
                         method: 'POST',
@@ -504,7 +501,7 @@
                 }
             },
             RegisterCompletion: async (email, chapter, uniqueCode, reportContent, finalGrade) => {
-                const scriptUrl = 'https://script.google.com/macros/s/AKfycbzfZqALbx-cwWjqyme4ntrfB_F7gpywjmPXyZrIa_BZRf2JmpgsaT1TGrfrE_xsCPPT_A/exec';
+                const scriptUrl = 'https://script.google.com/macros/s/AKfycbz5z-WPUT6f5hNGzXVSwVnPtndmNCA_QLMegG4ZiPtmyCz2ctPF6XOkCrfOxXoe59JvTA/exec';
                 const payload = {
                     action: 'registerCompletion',
                     email: email,
@@ -927,7 +924,7 @@
                     return null;
                 }
             };
-            const [selectedModel, setSelectedModel] = useState(localStorage.getItem('iStudy_preferred_model') || 'gemini-3-flash');
+            const [selectedModel, setSelectedModel] = useState(localStorage.getItem('iStudy_preferred_model') || 'gemma-4-26b-a4b-it');
 
             const [submission, setSubmission] = useState({
                 student_email: '',
@@ -989,7 +986,7 @@
                 setIsCheckingKey(true);
                 try {
                     // Use the top discovered model or a safe fallback for the ping
-                    const testModel = activeChain[0] || selectedModel || 'gemini-1.5-flash';
+                    const testModel = activeChain[0] || selectedModel || 'gemma-4-26b-a4b-it';
                     await window.Core.GeminiRequest(testModel, "ping");
                     setIsCheckingKey(false);
 
@@ -2191,8 +2188,8 @@ You are managing a "Critical Thinking Simulation" and have the intellect of a un
                                                     ))
                                                 ) : (
                                                     <>
-                                                        <option value="gemini-1.5-flash">Gemini 1.5 Flash (Auto-Detecting...)</option>
-                                                        <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+                                                        <option value="gemma-4-26b-a4b-it">gemma-4-26b-a4b-it (Primary)</option>
+                                                        <option value="gemma-4-31b-it">gemma-4-31b-it (Backup)</option>
                                                     </>
                                                 )}
                                             </select>

@@ -438,14 +438,27 @@
                     `).join('\n')}
 
                     Task:
-                    Review each response. Provide:
-                    1. A grade (1-5).
-                    2. A concise critique.
-                    3. A model answer based on the transcript.
-                    4. The exact timestamp (e.g. 12:45) from the lecture transcript where the answer is found.
+                    Review each question and student response. For EACH question, provide:
+                    1. "grade": A number (1-5) evaluating the student response.
+                    2. "critique": A concise critique of what was right/wrong with the student's answer.
+                    3. "model_answer": The ideal model answer strictly based on the lecture transcript.
+                    4. "timestamp": The exact timestamp (e.g. "12:45") from the lecture transcript where the answer is found.
+                    5. "joker_mode": Randomly choose either "FACTUAL" or "CHALLENGE".
+                    6. "joker_statement": A short dialogue spoken by "Joker" (a confident peer testing the student's critical thinking):
+                       - If joker_mode is "FACTUAL": Paraphrase the model answer accurately in peer tone (e.g. "If I remember correctly from the video, [accurate fact]. Does that sound right to you?").
+                       - If joker_mode is "CHALLENGE": Present a subtle conceptual oversight/misconception derived from the model answer that sounds plausible but is factually incorrect (e.g. "If I remember correctly from the video, [plausible misconception]. Does that sound right to you?").
 
                     Output MUST be a STRICT JSON array of objects:
-                    [{"grade": 4, "critique": "...", "model_answer": "...", "timestamp": "12:45"}, ...]
+                    [
+                      {
+                        "grade": 4,
+                        "critique": "...",
+                        "model_answer": "...",
+                        "timestamp": "12:45",
+                        "joker_mode": "CHALLENGE",
+                        "joker_statement": "If I remember correctly from the video, ... Does that sound right to you?"
+                      }
+                    ]
                 `;
 
                 try {
@@ -1375,7 +1388,17 @@ I could not make sense of what you wrote.
                     if (!studentMsg) {
                         setIsProcessing(true);
 
-                        // Randomly choose orientation (50/50 chance)
+                        // If Joker's challenge was pre-generated in the batch analysis, use it instantly (0s wait!)
+                        if (analysis.joker_statement) {
+                            const mode = analysis.joker_mode || "FACTUAL";
+                            const jokerRes = analysis.joker_statement;
+                            setJokerData({ mode, statement: jokerRes });
+                            addMessage('joker', jokerRes);
+                            setIsProcessing(false);
+                            return;
+                        }
+
+                        // Fallback: dynamically generate if pre-calculated statement was missing
                         const mode = Math.random() < 0.5 ? "FACTUAL" : "CHALLENGE";
 
                         const jokerIntroPrompt = `### EDUCATIONAL CONTEXT
