@@ -1055,12 +1055,6 @@
 
                 setIsProcessing(true);
 
-                if (!file.type.startsWith('image/')) {
-                    addMessage('system', "💡 **Did you know?**\nResearch shows that handwriting responses significantly improves conceptual understanding and retention compared to typing. While I can process digital text, I highly encourage using handwritten notes for your own learning benefit.");
-                }
-
-                // addMessage('system', `Hello! File **${file.name}** received. I am processing your content now...`);
-
                 try {
                     const extraction = await window.Core.ExtractDataFromUploadedFile(file);
                     // addMessage('system', "### Extracted Text:\n" + extraction.full_text);
