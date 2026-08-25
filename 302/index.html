@@ -304,7 +304,7 @@
                 // and is never sent to the student's browser.
                 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz5z-WPUT6f5hNGzXVSwVnPtndmNCA_QLMegG4ZiPtmyCz2ctPF6XOkCrfOxXoe59JvTA/exec';
 
-                // 1. DYNAMIC CHAIN RESOLUTION: Primary Gemini 3.1 Flash-Lite with Gemma secondary fallbacks
+                // 1. DYNAMIC CHAIN RESOLUTION: 1st Gemini 3.1 Flash-Lite, 2nd Gemini 3.5 Flash-Lite, 3rd/4th Gemma
                 let targetModel = model || localStorage.getItem('iStudy_preferred_model') || 'gemini-3.1-flash-lite';
 
                 let uniqueChain = [];
@@ -317,7 +317,7 @@
                 if (savedChain.length > 0) {
                     uniqueChain = [targetModel, ...savedChain.filter(m => m !== targetModel)];
                 } else {
-                    uniqueChain = [targetModel, 'gemini-3.1-flash-lite', 'gemma-4-26b-a4b-it', 'gemma-4-31b-it'];
+                    uniqueChain = [targetModel, 'gemini-3.1-flash-lite', 'gemini-3.5-flash-lite', 'gemma-4-26b-a4b-it', 'gemma-4-31b-it'];
                 }
                 uniqueChain = [...new Set(uniqueChain)];
 
@@ -376,7 +376,7 @@
             // DISCOVERY UTILITIES
             Discovery: {
                 getQualityTiers: () => [
-                    'gemini-3.1-flash-lite', 'gemini-3.5-flash-lite', 'gemini-3.6-flash', 'gemma-4-26b-a4b-it', 'gemma-4-31b-it'
+                    'gemini-3.1-flash-lite', 'gemini-3.5-flash-lite', 'gemma-4-26b-a4b-it', 'gemma-4-31b-it'
                 ],
                 probeModel: async (modelId) => {
                     const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz5z-WPUT6f5hNGzXVSwVnPtndmNCA_QLMegG4ZiPtmyCz2ctPF6XOkCrfOxXoe59JvTA/exec';
