@@ -1,0 +1,1023 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>iStudy - Tontin Prompt Benchmark & Cost Analysis</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@600;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-hover: #1d4ed8;
+            --bg: #f1f5f9;
+            --card-bg: #ffffff;
+            --text-main: #0f172a;
+            --text-muted: #64748b;
+            --border: #cbd5e1;
+            --success: #059669;
+            --warning: #d97706;
+            --danger: #dc2626;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: var(--bg);
+            color: var(--text-main);
+            padding: 30px 20px;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+        }
+
+        .container {
+            background: var(--card-bg);
+            border-radius: 14px;
+            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+            padding: 32px;
+            max-width: 960px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        h1 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.5rem;
+            margin-top: 0;
+            color: var(--text-main);
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .desc {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            line-height: 1.5;
+            margin-bottom: 20px;
+        }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 18px;
+        }
+
+        @media (max-width: 720px) {
+            .grid-2 {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .section {
+            margin-bottom: 18px;
+        }
+
+        label {
+            display: block;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #334155;
+            margin-bottom: 6px;
+        }
+
+        input[type="text"], select, textarea {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 0.95rem;
+            box-sizing: border-box;
+            background: #f8fafc;
+            font-family: inherit;
+            color: var(--text-main);
+            transition: border-color 0.15s, background-color 0.15s;
+        }
+
+        input[type="text"]:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+            background: #ffffff;
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 65px;
+        }
+
+        .treatment-card {
+            background: #f8fafc;
+            border: 2px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 16px;
+            margin-bottom: 20px;
+        }
+
+        .treatment-header {
+            font-weight: 700;
+            font-size: 0.95rem;
+            color: #1e293b;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .treatment-radios {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        @media (max-width: 650px) {
+            .treatment-radios {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .treatment-option {
+            background: white;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            padding: 12px;
+            cursor: pointer;
+            transition: border-color 0.15s, box-shadow 0.15s;
+            position: relative;
+        }
+
+        .treatment-option:hover {
+            border-color: var(--primary);
+        }
+
+        .treatment-option.active {
+            border-color: var(--primary);
+            background: #eff6ff;
+            box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+        }
+
+        .treatment-option input {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            margin: 0;
+        }
+
+        .treatment-title {
+            font-weight: 700;
+            font-size: 0.85rem;
+            color: #0f172a;
+            margin-bottom: 4px;
+        }
+
+        .treatment-desc {
+            font-size: 0.75rem;
+            color: #64748b;
+            line-height: 1.3;
+        }
+
+        .button-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-top: 20px;
+            margin-bottom: 20px;
+        }
+
+        button {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.15s, transform 0.05s;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        button:hover {
+            background-color: var(--primary-hover);
+        }
+
+        button:active {
+            transform: scale(0.99);
+        }
+
+        button:disabled {
+            background-color: #94a3b8;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-experiment {
+            background-color: #7c3aed;
+        }
+
+        .btn-experiment:hover {
+            background-color: #6d28d9;
+        }
+
+        .btn-compare-models {
+            background-color: #0284c7;
+        }
+
+        .btn-compare-models:hover {
+            background-color: #0369a1;
+        }
+
+        .secondary-btn {
+            background-color: #e2e8f0;
+            color: #334155;
+        }
+
+        .secondary-btn:hover {
+            background-color: #cbd5e1;
+        }
+
+        /* Cost Table Styles */
+        .cost-table-container {
+            margin-top: 24px;
+            margin-bottom: 24px;
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+
+        .cost-table-header {
+            background: #f8fafc;
+            padding: 14px 18px;
+            border-bottom: 1px solid #e2e8f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .cost-table-title {
+            font-weight: 700;
+            font-size: 0.95rem;
+            color: #0f172a;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        table.cost-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+            text-align: left;
+        }
+
+        table.cost-table th {
+            background: #f1f5f9;
+            color: #475569;
+            padding: 10px 14px;
+            font-weight: 600;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        table.cost-table td {
+            padding: 12px 14px;
+            border-bottom: 1px solid #f1f5f9;
+            color: #1e293b;
+        }
+
+        table.cost-table tr:hover td {
+            background-color: #f8fafc;
+        }
+
+        .highlight-cheapest {
+            background-color: #ecfdf5 !important;
+            font-weight: 700;
+            color: #065f46 !important;
+        }
+
+        .badge-cheapest {
+            background: #10b981;
+            color: white;
+            font-size: 0.68rem;
+            padding: 2px 6px;
+            border-radius: 4px;
+            margin-left: 6px;
+            font-weight: 700;
+        }
+
+        details {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 20px;
+        }
+
+        summary {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #475569;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .prompt-preview-box {
+            margin-top: 10px;
+            background: #0f172a;
+            color: #94a3b8;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.8rem;
+            padding: 12px;
+            border-radius: 6px;
+            white-space: pre-wrap;
+            max-height: 220px;
+            overflow-y: auto;
+        }
+
+        .status-box {
+            padding: 16px;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            line-height: 1.5;
+            display: none;
+            margin-top: 20px;
+        }
+
+        .status-success {
+            background-color: #ecfdf5;
+            border: 1px solid #a7f3d0;
+            color: #065f46;
+        }
+
+        .status-error {
+            background-color: #fef2f2;
+            border: 1px solid #fecaca;
+            color: #991b1b;
+        }
+
+        .status-loading {
+            background-color: #eff6ff;
+            border: 1px solid #bfdbfe;
+            color: #1e40af;
+        }
+
+        .timer-badge {
+            display: inline-block;
+            background: #dbeafe;
+            color: #1e40af;
+            font-weight: 700;
+            padding: 4px 10px;
+            border-radius: 9999px;
+            font-size: 0.85rem;
+            margin-bottom: 8px;
+        }
+
+        .tontin-response-card {
+            background: #ffffff;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            padding: 14px;
+            margin-top: 10px;
+            font-size: 0.92rem;
+            color: #0f172a;
+            white-space: pre-wrap;
+            line-height: 1.5;
+        }
+
+        /* Multi-Card Grid for Comparisons */
+        .experiment-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 14px;
+            margin-top: 16px;
+        }
+
+        @media (max-width: 800px) {
+            .experiment-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .exp-card {
+            background: white;
+            border-radius: 8px;
+            padding: 14px;
+            border: 1px solid #e2e8f0;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+
+        .exp-card-header {
+            font-weight: 700;
+            font-size: 0.88rem;
+            color: #1e293b;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #f1f5f9;
+            margin-bottom: 8px;
+        }
+
+        .exp-time-badge {
+            font-size: 1.15rem;
+            font-weight: 800;
+            color: #2563eb;
+            margin-bottom: 4px;
+        }
+
+        .exp-meta {
+            font-size: 0.75rem;
+            color: #64748b;
+            margin-bottom: 10px;
+        }
+
+        .exp-output-text {
+            font-size: 0.82rem;
+            line-height: 1.45;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 10px;
+            flex-grow: 1;
+            white-space: pre-wrap;
+            max-height: 280px;
+            overflow-y: auto;
+        }
+
+        .log-box {
+            background: #0f172a;
+            color: #38bdf8;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.8rem;
+            padding: 14px;
+            border-radius: 8px;
+            overflow-x: auto;
+            max-height: 260px;
+            white-space: pre-wrap;
+            margin-top: 15px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🐢 iStudy - Tontin Benchmark & Cost Analysis</h1>
+        <p class="desc">
+            Benchmark response latency, token consumption, and projected costs for assessing <strong>30 questions across 200 students</strong> using the latest Google AI models.
+        </p>
+
+        <!-- Backend Configuration -->
+        <div class="grid-2">
+            <div class="section">
+                <label>Google Apps Script Web App URL</label>
+                <input type="text" id="scriptUrl" value="https://script.google.com/macros/s/AKfycbz5z-WPUT6f5hNGzXVSwVnPtndmNCA_QLMegG4ZiPtmyCz2ctPF6XOkCrfOxXoe59JvTA/exec" />
+            </div>
+
+            <div class="section">
+                <label>Target Model to Test</label>
+                <select id="modelSelect" onchange="updatePromptPreview()">
+                    <option value="gemini-3.1-flash-lite" selected>gemini-3.1-flash-lite (Cheapest Good Option &bull; $0.25 / $1.50 per 1M)</option>
+                    <option value="gemini-3.5-flash-lite">gemini-3.5-flash-lite (High-Throughput Grading &bull; $0.30 / $2.50 per 1M)</option>
+                    <option value="gemini-3.6-flash">gemini-3.6-flash (Flagship Workhorse &bull; $0.75 / $3.75 per 1M)</option>
+                    <option value="gemma-4-26b-a4b-it">gemma-4-26b-a4b-it (Open Weights 26B &bull; Slow)</option>
+                    <option value="gemma-4-31b-it">gemma-4-31b-it (Open Weights 31B &bull; Slow)</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Token Cap Treatment Selection Box -->
+        <div class="treatment-card">
+            <div class="treatment-header">🧪 Select Token Cap Treatment:</div>
+            <div class="treatment-radios">
+                <div class="treatment-option active" id="opt-t1" onclick="selectTreatment('T1')">
+                    <input type="radio" name="treatment" value="T1" checked>
+                    <div class="treatment-title">Treatment 1: Baseline</div>
+                    <div class="treatment-desc">Full unconstrained rubric with full verbose feedback (~300 tokens).</div>
+                </div>
+
+                <div class="treatment-option" id="opt-t2" onclick="selectTreatment('T2')">
+                    <input type="radio" name="treatment" value="T2">
+                    <div class="treatment-title">Treatment 2: Moderate Cap</div>
+                    <div class="treatment-desc">Strictly &le; 70 words. Max 1 brief clear point & 1 brief missing point (~90 tokens).</div>
+                </div>
+
+                <div class="treatment-option" id="opt-t3" onclick="selectTreatment('T3')">
+                    <input type="radio" name="treatment" value="T3">
+                    <div class="treatment-title">Treatment 3: Ultra-Tight Cap</div>
+                    <div class="treatment-desc">Strictly &le; 30 words. 3-line format: Clear / Missing / Rating (~40 tokens).</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Manual Input Variables -->
+        <div class="section">
+            <label>1. Question Text</label>
+            <textarea id="questionInput" rows="2" oninput="updatePromptPreview()">What is the definition of biogeography and how does it combine biological and geographical factors?</textarea>
+        </div>
+
+        <div class="section">
+            <label>2. Expected Response (Model Answer)</label>
+            <textarea id="expectedInput" rows="3" oninput="updatePromptPreview()">Biogeography is the study of the geographic distribution of living organisms across space and geological time. It integrates biological principles such as evolution, speciation, and extinction with geographical and environmental factors including plate tectonics, climate gradients, and geographic barriers.</textarea>
+        </div>
+
+        <div class="section">
+            <label>3. Student's Explanation (to Tontin)</label>
+            <textarea id="studentInput" rows="3" oninput="updatePromptPreview()">It's basically studying where different animals and plants live across the planet and figuring out why they are found in those places instead of other places because of the weather and how continents moved over time.</textarea>
+        </div>
+
+        <!-- Live Assembled Prompt Preview -->
+        <details id="promptDetails">
+            <summary>🔍 Click to inspect the exact prompt assembled for the active treatment</summary>
+            <div id="promptPreview" class="prompt-preview-box"></div>
+        </details>
+
+        <!-- Actions -->
+        <div class="button-group">
+            <button id="sendBtn" onclick="runSingleBenchmark()">🚀 Test Selected Model & Treatment</button>
+            <button id="cmpBtn" class="btn-compare-models" onclick="runCompareModelsBenchmark()">⚡ Compare Top 3 Gemini Models</button>
+            <button id="expBtn" class="btn-experiment" onclick="runAll3TreatmentsExperiment()">🔬 Run 3-Treatment Token Experiment</button>
+            <button class="secondary-btn" onclick="resetDefaults()">🔄 Reset Sample Data</button>
+        </div>
+
+        <!-- Cost Projection Table -->
+        <div class="cost-table-container">
+            <div class="cost-table-header">
+                <div class="cost-table-title">
+                    <span>📊</span>
+                    <span>Cost & Token Projections (30 Questions &times; 200 Students per Lecture)</span>
+                </div>
+                <span style="font-size: 0.78rem; color: #64748b;">Assumes Full Workflow: Batch + Newton + Tontin + Joker</span>
+            </div>
+            <table class="cost-table">
+                <thead>
+                    <tr>
+                        <th>Model ID</th>
+                        <th>Pricing (In / Out per 1M)</th>
+                        <th>Speed (Typical)</th>
+                        <th>Cost / 1 Student (30 Qs)</th>
+                        <th>Total Cost (200 Students)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr class="highlight-cheapest">
+                        <td>
+                            <strong>gemini-3.1-flash-lite</strong>
+                            <span class="badge-cheapest">RECOMMENDED</span>
+                        </td>
+                        <td>$0.25 / $1.50</td>
+                        <td>⚡ ~2–3s</td>
+                        <td><strong>~$0.036</strong> (3.6¢)</td>
+                        <td><strong style="color: #059669;">~$7.16 / lecture</strong></td>
+                    </tr>
+                    <tr>
+                        <td><strong>gemini-3.5-flash-lite</strong></td>
+                        <td>$0.30 / $2.50</td>
+                        <td>⚡ ~3–4s</td>
+                        <td>~$0.053 (5.3¢)</td>
+                        <td><strong>~$10.55 / lecture</strong></td>
+                    </tr>
+                    <tr>
+                        <td><strong>gemini-3.6-flash</strong></td>
+                        <td>$0.75 / $3.75</td>
+                        <td>⚡ ~3–4s</td>
+                        <td>~$0.097 (9.7¢)</td>
+                        <td><strong>~$19.39 / lecture</strong></td>
+                    </tr>
+                    <tr style="color: #94a3b8;">
+                        <td>gemma-4-26b-a4b-it</td>
+                        <td>Open / Free (Shared)</td>
+                        <td>⏳ ~70–80s (Slow)</td>
+                        <td>$0.00</td>
+                        <td>$0.00 (High Latency)</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Status & Results -->
+        <div id="statusBox" class="status-box"></div>
+        <div id="logBox" class="log-box"></div>
+    </div>
+
+    <script>
+        let currentTreatment = 'T1';
+
+        const MODEL_RATES = {
+            'gemini-3.1-flash-lite': { inputPerM: 0.25, outputPerM: 1.50, name: 'Gemini 3.1 Flash-Lite' },
+            'gemini-3.5-flash-lite': { inputPerM: 0.30, outputPerM: 2.50, name: 'Gemini 3.5 Flash-Lite' },
+            'gemini-3.6-flash': { inputPerM: 0.75, outputPerM: 3.75, name: 'Gemini 3.6 Flash' },
+            'gemma-4-26b-a4b-it': { inputPerM: 0.00, outputPerM: 0.00, name: 'Gemma 4 26B' },
+            'gemma-4-31b-it': { inputPerM: 0.00, outputPerM: 0.00, name: 'Gemma 4 31B' }
+        };
+
+        function selectTreatment(tKey) {
+            currentTreatment = tKey;
+            document.querySelectorAll('.treatment-option').forEach(el => el.classList.remove('active'));
+            const activeEl = document.getElementById('opt-' + tKey.toLowerCase());
+            if (activeEl) {
+                activeEl.classList.add('active');
+                activeEl.querySelector('input').checked = true;
+            }
+            updatePromptPreview();
+        }
+
+        function buildTontinPrompt(question, expectedAnswer, studentMsg, treatment = currentTreatment) {
+            let treatmentInstructions = '';
+
+            if (treatment === 'T1') {
+                treatmentInstructions = `
+### MANDATORY GUARDRAILS
+*   **No Questions:** Do not ask anything. The student cannot reply.
+*   **Final Assessment Phrases:**
+    *   **High:** "This is great, it is clear to me now!"
+    *   **Medium/Low:** "I am still not fully clear; I will watch that part of the video again to be certain."
+*   **CRITICAL FORMATTING:** 
+    *   **Headers:** Always put headers like **What was clear:** or **What is missing or incorrect:** on their own separate line in **bold**.
+    *   **Spacing:** You MUST use TWO blank lines (hit Enter twice) between every bullet point (✅ or ❓). 
+    *   **NO HTML:** Never use literal tags like <br>. Only use standard text and the Enter key for breaks.
+
+### OUTPUT FORMAT EXAMPLE:
+I could not make sense of what you wrote.
+
+**What is missing or incorrect:**
+
+❓ [Missing Concept A]
+
+
+❓ [Missing Concept B]
+
+
+**My assessment:** Low. I am still not fully clear; I will watch that part of the video again to be certain.`;
+            } else if (treatment === 'T2') {
+                treatmentInstructions = `
+### STRICT TOKEN & LENGTH CONSTRAINTS (TREATMENT 2 - MODERATE CAP)
+*   **LENGTH LIMIT:** You MUST keep your entire response under **70 words total**.
+*   **CONCISENESS:** List at most ONE brief bullet for what was clear (✅) and at most ONE brief bullet for what is missing (❓).
+*   **NO FILLER:** Do not include polite conversational preambles or greetings.
+*   **Final Assessment Phrases:**
+    *   **High:** "This is great, it is clear to me now!"
+    *   **Medium/Low:** "I am still not fully clear; I will review the video."`;
+            } else if (treatment === 'T3') {
+                treatmentInstructions = `
+### STRICT TOKEN & LENGTH CONSTRAINTS (TREATMENT 3 - ULTRA-TIGHT CAP)
+*   **LENGTH LIMIT:** You MUST keep your response strictly under **30 words total**.
+*   **OUTPUT STRUCTURE:** You MUST strictly output ONLY this 3-line format with no extra text or pleasantries:
+✅ Clear: [1 brief point]
+❓ Missing: [1 brief point]
+Rating: [High / Medium / Low]`;
+            }
+
+            const tontinEvalPrompt = `### EDUCATIONAL CONTEXT
+This is a pedagogical exercise designed to enhance the student's capacity to articulate course content clearly and independently. 
+
+### ROLE
+You are "Tontin," a struggling peer student requiring the User to explain a given question in their own words. Your goal is to see if the student’s alternative explanation matches the expected response. Your assessment must be humble and specific to the material provided, outlining what was clear or not.
+
+### INPUT DATA
+1. **Student Explanation:** "${studentMsg}"
+2. **Expected Response:** "${expectedAnswer}"
+
+### TASK
+Compare the **Student Explanation** against the **Expected Response**.
+${treatmentInstructions}
+
+### ACTUAL OUTPUT START:
+(Start your response here based on the student's message)`;
+
+            const systemContext = `
+You are playing a role in an educational system for a Biogeography course.
+Your task is to respond as an AI character to a student's response.
+
+Course Data:
+- Lecture Transcript: Model Answer for context: ${expectedAnswer}
+- The Question: ${question}
+- Student's Transcribed Response: ${studentMsg}
+
+Character/Instruction: ${tontinEvalPrompt}
+
+Please keep your response academic yet engaging, and stay strictly within the context of the course transcript provided.`;
+
+            return systemContext;
+        }
+
+        function updatePromptPreview() {
+            const question = document.getElementById('questionInput').value.trim();
+            const expected = document.getElementById('expectedInput').value.trim();
+            const student = document.getElementById('studentInput').value.trim();
+            const prompt = buildTontinPrompt(question, expected, student, currentTreatment);
+            document.getElementById('promptPreview').textContent = prompt;
+        }
+
+        async function queryBackend(scriptUrl, model, promptText) {
+            const startTime = performance.now();
+            const response = await fetch(scriptUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain' },
+                body: JSON.stringify({
+                    action: 'proxyGemini',
+                    model: model,
+                    promptText: promptText
+                })
+            });
+
+            const rawText = await response.text();
+            const elapsed = ((performance.now() - startTime) / 1000).toFixed(2);
+
+            let data;
+            try {
+                data = JSON.parse(rawText);
+            } catch (e) {
+                throw new Error(`Apps Script returned non-JSON (${elapsed}s): ${rawText.substring(0, 150)}`);
+            }
+
+            if (data.status === 'error' || data.error) {
+                const errorMsg = data.error?.message || data.message || JSON.stringify(data);
+                throw new Error(`Backend Error (${elapsed}s): ${errorMsg}`);
+            }
+
+            const candidate = data.candidates?.[0];
+            const parts = candidate?.content?.parts || [];
+            const cleanText = parts
+                .filter(p => !p.thought)
+                .map(p => p.text || '')
+                .join('')
+                .trim();
+
+            const text = cleanText || parts[0]?.text || '';
+            const words = text ? text.split(/\s+/).filter(Boolean).length : 0;
+            const promptTokens = data.usageMetadata?.promptTokenCount || Math.round(promptText.length / 4);
+            const outputTokens = data.usageMetadata?.candidatesTokenCount || Math.round((text || '').length / 4);
+
+            return {
+                text,
+                elapsed,
+                words,
+                promptTokens,
+                outputTokens,
+                raw: data
+            };
+        }
+
+        function calculateLiveCost(modelId, inTokens, outTokens) {
+            const rate = MODEL_RATES[modelId] || { inputPerM: 0.25, outputPerM: 1.50 };
+            const singleCallCost = (inTokens * rate.inputPerM / 1e6) + (outTokens * rate.outputPerM / 1e6);
+            
+            // Full session extrapolation for 30 questions (Batch + Newton + Tontin + Joker)
+            // Estimated ~59.5k input tokens, ~13.95k output tokens per student
+            const fullStudentCost = (59500 * rate.inputPerM / 1e6) + (13950 * rate.outputPerM / 1e6);
+            const class200Cost = fullStudentCost * 200;
+
+            return {
+                singleCallCost: singleCallCost.toFixed(5),
+                fullStudentCost: fullStudentCost.toFixed(4),
+                class200Cost: class200Cost.toFixed(2)
+            };
+        }
+
+        async function runSingleBenchmark() {
+            const sendBtn = document.getElementById('sendBtn');
+            const cmpBtn = document.getElementById('cmpBtn');
+            const expBtn = document.getElementById('expBtn');
+            const statusBox = document.getElementById('statusBox');
+            const logBox = document.getElementById('logBox');
+            const scriptUrl = document.getElementById('scriptUrl').value.trim();
+            const model = document.getElementById('modelSelect').value;
+
+            const question = document.getElementById('questionInput').value.trim();
+            const expected = document.getElementById('expectedInput').value.trim();
+            const student = document.getElementById('studentInput').value.trim();
+
+            if (!scriptUrl) {
+                alert('Please enter your Google Apps Script URL.');
+                return;
+            }
+
+            sendBtn.disabled = true;
+            cmpBtn.disabled = true;
+            expBtn.disabled = true;
+            statusBox.style.display = 'block';
+            statusBox.className = 'status-box status-loading';
+            statusBox.innerHTML = `⏳ <strong>Testing ${currentTreatment} with model: <code>${escapeHtml(model)}</code>...</strong><br>Sending request to proxy. Measuring latency...`;
+            logBox.style.display = 'none';
+
+            try {
+                const prompt = buildTontinPrompt(question, expected, student, currentTreatment);
+                const res = await queryBackend(scriptUrl, model, prompt);
+                const costs = calculateLiveCost(model, res.promptTokens, res.outputTokens);
+
+                statusBox.className = 'status-box status-success';
+                statusBox.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+                        <div class="timer-badge">⏱️ Completed in ${res.elapsed}s</div>
+                        <span style="font-size: 0.85rem; color: #475569;">
+                            <strong>Tokens:</strong> In: ${res.promptTokens} | Out: ${res.outputTokens} (${res.words} words)
+                        </span>
+                    </div>
+                    
+                    <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; padding: 8px 12px; margin-top: 8px; font-size: 0.85rem; color: #166534;">
+                        💰 <strong>Cost Projection (${escapeHtml(model)}):</strong>
+                        This 1 Turn: <strong>$${costs.singleCallCost}</strong> &bull; 
+                        1 Student (30 Qs): <strong>$${costs.fullStudentCost}</strong> &bull; 
+                        <strong>200 Students: $${costs.class200Cost} / lecture</strong>
+                    </div>
+
+                    <div style="margin-top: 12px;"><strong>🐢 Tontin's Output (${currentTreatment}):</strong></div>
+                    <div class="tontin-response-card">${escapeHtml(res.text)}</div>
+                `;
+
+                logBox.style.display = 'block';
+                logBox.textContent = "RAW GEMINI JSON:\n" + JSON.stringify(res.raw, null, 2);
+
+            } catch (err) {
+                statusBox.className = 'status-box status-error';
+                statusBox.innerHTML = `❌ <strong>Error:</strong> ${escapeHtml(err.message)}`;
+            } finally {
+                sendBtn.disabled = false;
+                cmpBtn.disabled = false;
+                expBtn.disabled = false;
+            }
+        }
+
+        async function runCompareModelsBenchmark() {
+            const sendBtn = document.getElementById('sendBtn');
+            const cmpBtn = document.getElementById('cmpBtn');
+            const expBtn = document.getElementById('expBtn');
+            const statusBox = document.getElementById('statusBox');
+            const logBox = document.getElementById('logBox');
+            const scriptUrl = document.getElementById('scriptUrl').value.trim();
+
+            const question = document.getElementById('questionInput').value.trim();
+            const expected = document.getElementById('expectedInput').value.trim();
+            const student = document.getElementById('studentInput').value.trim();
+
+            if (!scriptUrl) {
+                alert('Please enter your Google Apps Script URL.');
+                return;
+            }
+
+            sendBtn.disabled = true;
+            cmpBtn.disabled = true;
+            expBtn.disabled = true;
+            statusBox.style.display = 'block';
+            statusBox.className = 'status-box status-loading';
+            logBox.style.display = 'none';
+
+            const modelsToTest = [
+                { id: 'gemini-3.1-flash-lite', label: 'Gemini 3.1 Flash-Lite (Cheapest)' },
+                { id: 'gemini-3.5-flash-lite', label: 'Gemini 3.5 Flash-Lite (Grading)' },
+                { id: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash (Flagship)' }
+            ];
+
+            const results = [];
+
+            try {
+                const prompt = buildTontinPrompt(question, expected, student, currentTreatment);
+
+                for (let i = 0; i < modelsToTest.length; i++) {
+                    const m = modelsToTest[i];
+                    statusBox.innerHTML = `⏳ <strong>Comparing Model ${i + 1} of 3:</strong> Testing <code>${m.id}</code>...<br><span style="font-size: 0.85rem; color: #64748b;">Measuring speed, token consumption, and quality.</span>`;
+                    
+                    const res = await queryBackend(scriptUrl, m.id, prompt);
+                    const costs = calculateLiveCost(m.id, res.promptTokens, res.outputTokens);
+                    results.push({ ...m, ...res, costs });
+                }
+
+                statusBox.className = 'status-box status-success';
+                let html = `
+                    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #a7f3d0; padding-bottom: 8px; margin-bottom: 12px;">
+                        <strong>⚡ Gemini Models Shootout Comparison</strong>
+                        <span style="font-size: 0.85rem; color: #047857;">Treatment: <strong>${currentTreatment}</strong></span>
+                    </div>
+                    <div class="experiment-grid">
+                `;
+
+                results.forEach(r => {
+                    html += `
+                        <div class="exp-card">
+                            <div class="exp-card-header">${r.label}</div>
+                            <div class="exp-time-badge">⏱️ ${r.elapsed}s</div>
+                            <div class="exp-meta">
+                                Tokens: ${r.promptTokens} In &bull; ${r.outputTokens} Out (${r.words} words)<br>
+                                <strong style="color: #059669;">200 Students: $${r.costs.class200Cost}</strong>
+                            </div>
+                            <div class="exp-output-text">${escapeHtml(r.text)}</div>
+                        </div>
+                    `;
+                });
+
+                html += `</div>`;
+                statusBox.innerHTML = html;
+
+            } catch (err) {
+                statusBox.className = 'status-box status-error';
+                statusBox.innerHTML = `❌ <strong>Comparison Error:</strong> ${escapeHtml(err.message)}`;
+            } finally {
+                sendBtn.disabled = false;
+                cmpBtn.disabled = false;
+                expBtn.disabled = false;
+            }
+        }
+
+        async function runAll3TreatmentsExperiment() {
+            const sendBtn = document.getElementById('sendBtn');
+            const cmpBtn = document.getElementById('cmpBtn');
+            const expBtn = document.getElementById('expBtn');
+            const statusBox = document.getElementById('statusBox');
+            const logBox = document.getElementById('logBox');
+            const scriptUrl = document.getElementById('scriptUrl').value.trim();
+            const model = document.getElementById('modelSelect').value;
+
+            const question = document.getElementById('questionInput').value.trim();
+            const expected = document.getElementById('expectedInput').value.trim();
+            const student = document.getElementById('studentInput').value.trim();
+
+            if (!scriptUrl) {
+                alert('Please enter your Google Apps Script URL.');
+                return;
+            }
+
+            sendBtn.disabled = true;
+            cmpBtn.disabled = true;
+            expBtn.disabled = true;
+            statusBox.style.display = 'block';
+            statusBox.className = 'status-box status-loading';
+            logBox.style.display = 'none';
+
+            const treatments = [
+                { key: 'T1', label: 'Treatment 1: Baseline', desc: 'Unconstrained (~300 tokens)' },
+                { key: 'T2', label: 'Treatment 2: Moderate Cap', desc: '&le; 70 words (~90 tokens)' },
+                { key: 'T3', label: 'Treatment 3: Ultra-Tight Cap', desc: '&le; 30 words (~40 tokens)' }
+            ];
+
+            const results = [];
+
+            try {
+                for (let i = 0; i < treatments.length; i++) {
+                    const t = treatments[i];
+                    statusBox.innerHTML = `⏳ <strong>Running Experiment ${i + 1} of 3:</strong> Testing <em>${t.label}</em> with <code>${escapeHtml(model)}</code>...<br><span style="font-size: 0.85rem; color: #64748b;">Please wait while all 3 treatments complete.</span>`;
+                    
+                    const prompt = buildTontinPrompt(question, expected, student, t.key);
+                    const res = await queryBackend(scriptUrl, model, prompt);
+                    results.push({ ...t, ...res });
+                }
+
+                statusBox.className = 'status-box status-success';
+                let html = `
+                    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #a7f3d0; padding-bottom: 8px; margin-bottom: 12px;">
+                        <strong>🔬 3-Treatment Token Cap Experiment Results</strong>
+                        <span style="font-size: 0.85rem; color: #047857;">Model: <strong>${escapeHtml(model)}</strong></span>
+                    </div>
+                    <div class="experiment-grid">
+                `;
+
+                results.forEach(r => {
+                    html += `
+                        <div class="exp-card">
+                            <div class="exp-card-header">${r.label}</div>
+                            <div class="exp-time-badge">⏱️ ${r.elapsed}s</div>
+                            <div class="exp-meta">${r.words} words &bull; ~${r.outputTokens} tokens</div>
+                            <div class="exp-output-text">${escapeHtml(r.text)}</div>
+                        </div>
+                    `;
+                });
+
+                html += `</div>`;
+                statusBox.innerHTML = html;
+
+            } catch (err) {
+                statusBox.className = 'status-box status-error';
+                statusBox.innerHTML = `❌ <strong>Experiment Halted with Error:</strong> ${escapeHtml(err.message)}`;
+            } finally {
+                sendBtn.disabled = false;
+                cmpBtn.disabled = false;
+                expBtn.disabled = false;
+            }
+        }
+
+        function resetDefaults() {
+            document.getElementById('questionInput').value = "What is the definition of biogeography and how does it combine biological and geographical factors?";
+            document.getElementById('expectedInput').value = "Biogeography is the study of the geographic distribution of living organisms across space and geological time. It integrates biological principles such as evolution, speciation, and extinction with geographical and environmental factors including plate tectonics, climate gradients, and geographic barriers.";
+            document.getElementById('studentInput').value = "It's basically studying where different animals and plants live across the planet and figuring out why they are found in those places instead of other places because of the weather and how continents moved over time.";
+            selectTreatment('T1');
+        }
+
+        function escapeHtml(str) {
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        // Initialize preview on page load
+        updatePromptPreview();
+    </script>
+</body>
+</html>

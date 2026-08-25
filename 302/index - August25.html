@@ -273,7 +273,7 @@
 
                 try {
                     // Read preference
-                    const preferredModel = localStorage.getItem('iStudy_preferred_model') || 'gemini-3.1-flash-lite';
+                    const preferredModel = localStorage.getItem('iStudy_preferred_model') || 'gemma-4-26b-a4b-it';
                     const result = await window.Core.GeminiRequest(preferredModel, prompt);
                     const data = result.data;
 
@@ -304,8 +304,8 @@
                 // and is never sent to the student's browser.
                 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz5z-WPUT6f5hNGzXVSwVnPtndmNCA_QLMegG4ZiPtmyCz2ctPF6XOkCrfOxXoe59JvTA/exec';
 
-                // 1. DYNAMIC CHAIN RESOLUTION: Primary Gemini 3.1 Flash-Lite with Gemma secondary fallbacks
-                let targetModel = model || localStorage.getItem('iStudy_preferred_model') || 'gemini-3.1-flash-lite';
+                // 1. DYNAMIC CHAIN RESOLUTION: Exclusively Gemma models
+                let targetModel = model || localStorage.getItem('iStudy_preferred_model') || 'gemma-4-26b-a4b-it';
 
                 let uniqueChain = [];
                 const savedChainRaw = localStorage.getItem('iStudy_active_chain');
@@ -317,7 +317,7 @@
                 if (savedChain.length > 0) {
                     uniqueChain = [targetModel, ...savedChain.filter(m => m !== targetModel)];
                 } else {
-                    uniqueChain = [targetModel, 'gemini-3.1-flash-lite', 'gemma-4-26b-a4b-it', 'gemma-4-31b-it'];
+                    uniqueChain = [targetModel, 'gemma-4-26b-a4b-it', 'gemma-4-31b-it'];
                 }
                 uniqueChain = [...new Set(uniqueChain)];
 
@@ -376,7 +376,7 @@
             // DISCOVERY UTILITIES
             Discovery: {
                 getQualityTiers: () => [
-                    'gemini-3.1-flash-lite', 'gemini-3.5-flash-lite', 'gemini-3.6-flash', 'gemma-4-26b-a4b-it', 'gemma-4-31b-it'
+                    'gemma-4-26b-a4b-it', 'gemma-4-31b-it'
                 ],
                 probeModel: async (modelId) => {
                     const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz5z-WPUT6f5hNGzXVSwVnPtndmNCA_QLMegG4ZiPtmyCz2ctPF6XOkCrfOxXoe59JvTA/exec';
@@ -463,7 +463,7 @@
 
                 try {
                     // Use user preference for batch analysis too
-                    const preferredModel = localStorage.getItem('iStudy_preferred_model') || 'gemini-3.1-flash-lite';
+                    const preferredModel = localStorage.getItem('iStudy_preferred_model') || 'gemma-4-26b-a4b-it';
                     const result = await window.Core.GeminiRequest(preferredModel, prompt);
                     const data = result.data;
                     const text = window.Core.CleanResponseText(data);
@@ -555,7 +555,7 @@
             `;
 
             try {
-                const result = await window.Core.GeminiRequest('gemini-3.1-flash-lite', systemContext);
+                const result = await window.Core.GeminiRequest('gemini-2.5-flash', systemContext);
                 return window.Core.CleanResponseText(result?.data) || "I apologize, but I am having trouble forming a response right now. Let's continue.";
             } catch (err) {
                 console.error("Gemini API Error:", err);
@@ -689,15 +689,16 @@
                     const key = apiKeys[0].key; // Use primary key for judge/probe
 
                     try {
-                        // 1. DISCOVER (Gemini Flash & Gemma models)
+                        // 1. DISCOVER (Gemma-only)
                         const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${key}`;
                         const response = await fetch(url);
                         const data = await response.json();
                         const raw = data.models || [];
                         const pruned = raw.filter(m => {
                             const id = m.name.toLowerCase();
+                            // Only keep Gemma models to avoid charges from more expensive Gemini models
                             return m.supportedGenerationMethods.includes('generateContent') &&
-                                   (id.includes('flash') || id.includes('gemma')) &&
+                                   id.includes('gemma') &&
                                    !id.includes('embedding') &&
                                    !id.includes('aqa') &&
                                    !id.includes('rag');
@@ -900,7 +901,7 @@
                 `;
 
                 try {
-                    const targetModel = selectedModel || 'gemini-3.1-flash-lite';
+                    const targetModel = selectedModel || 'gemini-3-flash-preview';
                     const result = await window.Core.GeminiRequest(targetModel, systemContext);
 
                     // Sync UI with the actual model that responded
@@ -936,7 +937,7 @@
                     return null;
                 }
             };
-            const [selectedModel, setSelectedModel] = useState(localStorage.getItem('iStudy_preferred_model') || 'gemini-3.1-flash-lite');
+            const [selectedModel, setSelectedModel] = useState(localStorage.getItem('iStudy_preferred_model') || 'gemma-4-26b-a4b-it');
 
             const [submission, setSubmission] = useState({
                 student_email: '',
@@ -998,7 +999,7 @@
                 setIsCheckingKey(true);
                 try {
                     // Use the top discovered model or a safe fallback for the ping
-                    const testModel = activeChain[0] || selectedModel || 'gemini-3.1-flash-lite';
+                    const testModel = activeChain[0] || selectedModel || 'gemma-4-26b-a4b-it';
                     await window.Core.GeminiRequest(testModel, "ping");
                     setIsCheckingKey(false);
 

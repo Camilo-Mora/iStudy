@@ -53,7 +53,7 @@ function proxyGemini(model, promptText) {
       return response({ error: { message: "API key in cell A1 of sheet '" + apiKeySheet.getName() + "' is empty or invalid." } });
     }
 
-    const targetModel = model || "gemma-4-26b-a4b-it";
+    const targetModel = model || "gemini-3.1-flash-lite";
     const cleanModel = targetModel.includes('/') ? targetModel : ("models/" + targetModel);
     const url = "https://generativelanguage.googleapis.com/v1beta/" + cleanModel + ":generateContent?key=" + apiKey;
 

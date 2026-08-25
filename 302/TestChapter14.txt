@@ -1,3 +1,6 @@
 Chapter 14
 Question 1	What is overexploitation?
 Response: The removal of individuals from a population beyond their natural levels of replenishment.
+
+Question 2	What are the demographic processes that affect the size of a population?
+Response: natality, mortality, immigration, emigration
