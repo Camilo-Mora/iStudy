@@ -1844,13 +1844,7 @@ You are managing a "Critical Thinking Simulation" and have the intellect of a un
             return (
                 <div className="app-root">
                     <header>
-                        <div className="logo">IStudy <span style={{ fontSize: '0.5em', opacity: 0.6, verticalAlign: 'middle', fontWeight: 'normal' }}>1.20</span></div>
-                        <div className="settings-icon" onClick={() => setShowSettings(true)}>
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <circle cx="12" cy="12" r="3"></circle>
-                                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.72l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.72-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.72.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.72 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.72l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.72.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.72-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.72V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-                            </svg>
-                        </div>
+                        <div className="logo">IStudy <span style={{ fontSize: '0.5em', opacity: 0.6, verticalAlign: 'middle', fontWeight: 'normal' }}>1.21</span></div>
                     </header>
                     <main className="container">
                         <AnimatePresence mode="wait">
@@ -2210,8 +2204,10 @@ You are managing a "Critical Thinking Simulation" and have the intellect of a un
                                                     ))
                                                 ) : (
                                                     <>
-                                                        <option value="gemma-4-26b-a4b-it">gemma-4-26b-a4b-it (Primary)</option>
-                                                        <option value="gemma-4-31b-it">gemma-4-31b-it (Backup)</option>
+                                                        <option value="gemini-3.1-flash-lite">gemini-3.1-flash-lite (Primary)</option>
+                                                        <option value="gemini-3.5-flash-lite">gemini-3.5-flash-lite (Backup 1)</option>
+                                                        <option value="gemma-4-26b-a4b-it">gemma-4-26b-a4b-it (Backup 2)</option>
+                                                        <option value="gemma-4-31b-it">gemma-4-31b-it (Backup 3)</option>
                                                     </>
                                                 )}
                                             </select>
@@ -2240,33 +2236,6 @@ You are managing a "Critical Thinking Simulation" and have the intellect of a un
                                     }
                                 }}
                             />
-                        )
-                    }
-                    {
-                        showSettings && (
-                            <div className="settings-overlay">
-                                <div className="settings-modal">
-                                    <h2>iStudy Settings</h2>
-                                    <div className="modal-content">
-                                        <p>The AI service for this application is managed by your instructor. No API key is required from you.</p>
-                                        <p style={{ fontSize: '13px', color: 'var(--slate-600)', marginTop: '10px' }}>
-                                            If you are experiencing issues with AI responses, click <strong>Refresh Models</strong> below to re-detect the best available AI model, or contact Dr. Mora.
-                                        </p>
-                                    </div>
-
-                                    <div className="modal-actions" style={{ justifyContent: 'space-between' }}>
-                                        <button
-                                            className="btn-optimize-link"
-                                            onClick={() => { setShowSettings(false); setIsDiscovering(true); }}
-                                        >
-                                            🔄 Refresh Models
-                                        </button>
-                                        <div style={{ display: 'flex', gap: '10px' }}>
-                                            <button className="btn-secondary" onClick={() => { setShowSettings(false); setIsPendingUpload(false); }}>Close</button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
                         )
                     }
                     {showVideoModal && (
