@@ -314,7 +314,7 @@
                     savedChain = savedChainRaw ? JSON.parse(savedChainRaw) : [];
                 } catch (e) { savedChain = []; }
 
-                if (savedChain.length > 0) {
+                if (savedChain.length > 0 && savedChain.some(m => m.includes('gemini'))) {
                     uniqueChain = [targetModel, ...savedChain.filter(m => m !== targetModel)];
                 } else {
                     uniqueChain = [targetModel, 'gemini-3.1-flash-lite', 'gemini-3.5-flash-lite', 'gemma-4-26b-a4b-it', 'gemma-4-31b-it'];
@@ -858,8 +858,9 @@
             const [isWaitingForBriefing, setIsWaitingForBriefing] = useState(false);
 
             // Discovery States
+            const DEFAULT_MODEL_CHAIN = ['gemini-3.1-flash-lite', 'gemini-3.5-flash-lite', 'gemma-4-26b-a4b-it', 'gemma-4-31b-it'];
             const [isDiscovering, setIsDiscovering] = useState(false);
-            const [activeChain, setActiveChain] = useState([]);
+            const [activeChain, setActiveChain] = useState(DEFAULT_MODEL_CHAIN);
 
             // Video Portal Verification States
             const [showVideoModal, setShowVideoModal] = useState(false);
@@ -974,14 +975,28 @@
                 }]);
             };
 
-            // Startup: Load existing chain if available
+            // Startup: Load existing chain if available and valid
             useEffect(() => {
                 const raw = localStorage.getItem('iStudy_active_chain');
                 if (raw) {
                     try {
                         const parsed = JSON.parse(raw);
-                        if (Array.isArray(parsed) && parsed.length > 0) setActiveChain(parsed);
-                    } catch (e) { }
+                        if (Array.isArray(parsed) && parsed.some(m => m.includes('gemini'))) {
+                            setActiveChain(parsed);
+                        } else {
+                            // Automatically upgrade legacy Gemma-only cached chains
+                            localStorage.setItem('iStudy_active_chain', JSON.stringify(DEFAULT_MODEL_CHAIN));
+                            localStorage.setItem('iStudy_preferred_model', 'gemini-3.1-flash-lite');
+                            setActiveChain(DEFAULT_MODEL_CHAIN);
+                            setSelectedModel('gemini-3.1-flash-lite');
+                        }
+                    } catch (e) {
+                        setActiveChain(DEFAULT_MODEL_CHAIN);
+                    }
+                } else {
+                    localStorage.setItem('iStudy_active_chain', JSON.stringify(DEFAULT_MODEL_CHAIN));
+                    localStorage.setItem('iStudy_preferred_model', 'gemini-3.1-flash-lite');
+                    setActiveChain(DEFAULT_MODEL_CHAIN);
                 }
 
                 // Load API Keys
