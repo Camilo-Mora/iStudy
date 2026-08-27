@@ -1,13 +1,9 @@
 <!--
-    iStudy Diagnostic System - Version 2.0
-    Changelog v2.0:
-    - Pre-computed Joker critical thinking evaluations in initial batch query:
-      * Generated both 'joker_feedback_correct' and 'joker_feedback_incorrect' upfront during the initial batch analysis.
-      * Completely eliminated live LLM evaluation calls (N requests saved) during Joker's critical thinking phase.
-      * Instant 0ms response latency when the student provides their judgment.
-    - Implemented dedicated "Agree" and "Disagree" action buttons for Joker's turn:
-      * Replaces text typing during Joker phase to eliminate ambiguity, typos, and student input variation.
-    - Upgraded internal version identifier and documentation to 2.0.
+    iStudy Diagnostic System - Version 1.21
+    Changelog v1.21:
+    - Shifted Gemini AI API calls from client-side to server-side proxy via Google Apps Script.
+    - API key is now securely loaded from cell A1 of the "API_Key" sheet on the instructor's backend.
+    - Removed student-facing API key requirements, input fields, and quota-lock prompts from the GUI.
 -->
 <!DOCTYPE html>
 <html lang="en">
@@ -15,7 +11,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>iStudy 2.0 - Student Essay Review System</title>
+    <title>iStudy 1.21 - Student Essay Review System</title>
     <link rel="stylesheet" href="styles.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -449,10 +445,8 @@
                     4. "timestamp": The exact timestamp (e.g. "12:45") from the lecture transcript where the answer is found.
                     5. "joker_mode": Randomly choose either "FACTUAL" or "CHALLENGE".
                     6. "joker_statement": A short dialogue spoken by "Joker" (a confident peer testing the student's critical thinking):
-                       - If joker_mode is "FACTUAL": Paraphrase the model answer accurately in peer tone (e.g. "If I remember correctly from the video, [accurate fact]. Do you agree with this?").
-                       - If joker_mode is "CHALLENGE": Present a subtle conceptual oversight/misconception derived from the model answer that sounds plausible but is factually incorrect (e.g. "If I remember correctly from the video, [plausible misconception]. Do you agree with this?").
-                    7. "joker_feedback_correct": Short peer dialogue (1-2 sentences) when the student gives the correct judgment (Agreed if FACTUAL, or Disagreed if CHALLENGE). E.g. "Spot on! You got it right..." or "Nice catch! You didn't fall for the trap! In the video...".
-                    8. "joker_feedback_incorrect": Short peer dialogue (1-2 sentences) when the student gives the incorrect judgment (Disagreed if FACTUAL, or Agreed if CHALLENGE). E.g. "Gotcha! You fell for the trap! Actually, ..." or "Nope, that was actually true based on the video!".
+                       - If joker_mode is "FACTUAL": Paraphrase the model answer accurately in peer tone (e.g. "If I remember correctly from the video, [accurate fact]. Does that sound right to you?").
+                       - If joker_mode is "CHALLENGE": Present a subtle conceptual oversight/misconception derived from the model answer that sounds plausible but is factually incorrect (e.g. "If I remember correctly from the video, [plausible misconception]. Does that sound right to you?").
 
                     Output MUST be a STRICT JSON array of objects:
                     [
@@ -462,9 +456,7 @@
                         "model_answer": "...",
                         "timestamp": "12:45",
                         "joker_mode": "CHALLENGE",
-                        "joker_statement": "If I remember correctly from the video, ... Do you agree with this?",
-                        "joker_feedback_correct": "Nice catch! You didn't fall for the trap...",
-                        "joker_feedback_incorrect": "Gotcha! You fell for it..."
+                        "joker_statement": "If I remember correctly from the video, ... Does that sound right to you?"
                       }
                     ]
                 `;
@@ -856,7 +848,6 @@
             const [isWaitingForReviewStart, setIsWaitingForReviewStart] = useState(false);
             const [isWaitingForAvatarStart, setIsWaitingForAvatarStart] = useState(false);
             const [isWaitingForNextQuestion, setIsWaitingForNextQuestion] = useState(false);
-            const [isWaitingForJokerDecision, setIsWaitingForJokerDecision] = useState(false);
             const [isWaitingForCompilation, setIsWaitingForCompilation] = useState(false);
             const [isWaitingForIntroDisclaimer, setIsWaitingForIntroDisclaimer] = useState(false);
             const [isSystemLocked, setIsSystemLocked] = useState(false);
@@ -1400,70 +1391,106 @@ I could not make sense of what you wrote.
                     }
                 }
 
-                // STEP 2: JOKER (Instant Pre-Computed Challenge & Response)
+                // STEP 2: JOKER (Intro & Eval)
                 else if (step === 2) {
-                    setIsProcessing(true);
+                    if (!studentMsg) {
+                        setIsProcessing(true);
 
-                    // Use pre-computed Joker statement from batch analysis, with reliable fallback
-                    const mode = (analysis.joker_mode || "FACTUAL").toUpperCase();
-                    let statement = analysis.joker_statement;
-                    if (!statement) {
-                        statement = mode === "FACTUAL"
-                            ? `If I remember correctly from the video, ${analysis.model_answer}. Do you agree with this?`
-                            : `If I remember correctly from the video, ${analysis.model_answer}. Do you agree with this?`;
-                    }
-                    setJokerData({ mode, statement });
-                    addMessage('joker', statement);
-                    setIsProcessing(false);
-                    setIsWaitingForJokerDecision(true);
-                    return;
-                }
-            };
-
-            const handleJokerDecision = (choice) => {
-                if (isProcessing) return;
-                setIsWaitingForJokerDecision(false);
-
-                const studentMsg = choice === 'agree' ? "I Agree" : "I Disagree";
-                addMessage('user', studentMsg);
-                setIsProcessing(true);
-
-                const currentQ = submission.questions[currentQIndex];
-                const analysis = currentQ?.analysis || {};
-                const mode = (analysis.joker_mode || jokerData.mode || "FACTUAL").toUpperCase();
-                const isCorrect = (mode === "FACTUAL" && choice === 'agree') || (mode === "CHALLENGE" && choice === 'disagree');
-
-                // Determine feedback: Pre-computed from initial query, with robust local fallback
-                let feedback = "";
-                if (isCorrect) {
-                    feedback = analysis.joker_feedback_correct || (
-                        mode === "FACTUAL"
-                            ? "Spot on! That statement was accurate and matches the lecture material."
-                            : `Nice catch! You didn't fall for the trap. The lecture actually explained: ${analysis.model_answer}`
-                    );
-                } else {
-                    feedback = analysis.joker_feedback_incorrect || (
-                        mode === "FACTUAL"
-                            ? `Actually, that statement was factually correct based on the lecture: ${analysis.model_answer}`
-                            : `Gotcha! You fell for the trap! In the lecture, the verified answer was: ${analysis.model_answer}`
-                    );
-                }
-
-                // Short 300ms natural delay without any LLM network latency
-                setTimeout(() => {
-                    addMessage('joker', feedback);
-                    setIsProcessing(false);
-
-                    // Transition to next question or completion
-                    setTimeout(() => {
-                        if (currentQIndex < submission.questions.length - 1) {
-                            addMessage('system', "Can we move to the next question?");
-                            setIsWaitingForNextQuestion(true);
-                        } else {
-                            runNextStep(currentQIndex + 1, 0);
+                        // If Joker's challenge was pre-generated in the batch analysis, use it instantly (0s wait!)
+                        if (analysis.joker_statement) {
+                            const mode = analysis.joker_mode || "FACTUAL";
+                            const jokerRes = analysis.joker_statement;
+                            setJokerData({ mode, statement: jokerRes });
+                            addMessage('joker', jokerRes);
+                            setIsProcessing(false);
+                            return;
                         }
-                    }, 1000);
-                }, 300);
+
+                        // Fallback: dynamically generate if pre-calculated statement was missing
+                        const mode = Math.random() < 0.5 ? "FACTUAL" : "CHALLENGE";
+
+                        const jokerIntroPrompt = `### EDUCATIONAL CONTEXT
+This is a controlled critical thinking exercise for a Biogeography course designed to train the student's analytical skills. You are testing the student’s capacity to judge whether a statement is scientifically sound or conceptually misconstructed. To do so, you play "Joker," a confident-sounding peer who generates statements derived from the provided and verified course material. Depending on your target orientation, you will present either the "Verified Lecture Content" or a "Conceptual Oversight," which the student must then be able to identify and evaluate.
+
+### INPUT DATA
+1. **The Question:** ${q.question_text}
+2. **The Verified Lecture Content:** ${analysis.model_answer}
+3. **The Target Orientation:** ${mode}
+
+### INSTRUCTIONS
+Your goal is to generate a single statement derived from the provided **Verified Lecture Content**, which you will paraphrase according to your **Target Orientation**.
+
+**If your Orientation is "FACTUAL":**
+* Paraphrase the **Verified Lecture Content** using different words while maintaining 100% scientific accuracy.
+
+**If your Orientation is "CHALLENGE":**
+* You must present a **Conceptual Oversight** (a misconstructed version of the content).
+* This version must sound plausible to a casual student but be **factually or logically incorrect** upon closer inspection.
+* **Use one of these Transformation Tactics:**
+    1.  **Relationship Reversal:** Swap the Cause and Effect from the Verified Lecture Content.
+    2.  **Constraint Omission:** Remove a necessary condition (e.g., "Water always boils at 100°C" -> omit "at sea level").
+    3.  **Misconception:** State a common misconception related to the topic (e.g., "bats are birds because they fly").
+
+### SAFETY CHECK (Self-Correction)
+Before outputting a CHALLENGE statement, ask yourself: "Is this misconstruct obvious enough that a professor would mark it wrong?" If the answer is "It's debatable," **discard it** and choose a more obvious misconstruct.
+
+### MANDATORY GUARDRAILS
+1. **Confidence:** Speak with absolute certainty, as if stating an obvious fact.
+2. **No Hair-Splitting:** The error in a CHALLENGE statement must be objective and indisputable based on the provided material. 
+3. **Professor Check:** Before responding, ensure that a professor would mark your CHALLENGE statement as "Incorrect."
+4. **Tone:** Speak as a peer student. Start with phrases like "If I remember correctly from the video..." and end with a check-in like "Does that sound right to you?".
+
+### OUTPUT FORMAT
+Output *only* your dialogue as Joker. No labels. No preamble. No "Version 1". Just your speech.`;
+
+                        const jokerRes = await invokeLLM(jokerIntroPrompt, commonContext);
+                        if (!jokerRes) return; // HALT if Locked
+                        setJokerData({ mode, statement: jokerRes });
+                        addMessage('joker', jokerRes);
+                        setIsProcessing(false);
+                        return;
+                    } else {
+                        setIsProcessing(true);
+                        const jokerEvalPrompt = `### SYSTEM CONTEXT
+You are managing a "Critical Thinking Simulation" and have the intellect of a university professor. A student was presented with a specific claim. Your task is to evaluate if the student correctly identified whether that claim was factual or an inaccuracy.
+
+### DATA REFERENCE
+- **Verified Course Content:** "${analysis.model_answer}"
+- **Presented Claim (The Statement to evaluate):** "${jokerData.statement}"
+- **Student Response:** "${studentMsg}"
+
+### INTERNAL EVALUATION LOGIC (Do not output)
+1. **Verification Phase:** Compare the [Presented Claim] against the [Verified Course Content]. 
+   - Determination: Is the claim FACTUAL or an INACCURACY?
+2. **Scoring Phase:**
+   - **SUCCESS:** The student rejected an INACCURACY or accepted a FACTUAL claim.
+   - **FAIL:** The student accepted an INACCURACY or rejected a FACTUAL claim.
+
+### RESPONSE GUIDELINES
+- **Persona:** Speak as a sharp, competitive peer who set a challenge for the student. 
+- **Tone:** Friendly, concise, direct and slightly challenging.(e.g., "Nice catch," "Gotcha," "Spot on"). , 
+- **First Sentence:** Provide a very brief assessment (e.g., "Correct, you didn't fall for the trap!" or "Incorrect, you fell for it.").
+- **Conclusion:** Concisely confirm the [Verified Course Content] to ensure the student learns the correct concept.
+- **Constraint:** Output ONLY the dialogue for the student. Max 2-3 sentences. No apologies for inaccuracies; they were deliberate challenges.`;
+
+                        const jokerResponse = await invokeLLM(jokerEvalPrompt, commonContext);
+                        if (!jokerResponse) return; // HALT if Locked
+
+                        addMessage('joker', jokerResponse);
+                        setIsProcessing(false);
+
+                        // Move to next question after Joker feedback
+                        setTimeout(() => {
+                            if (qIdx < submission.questions.length - 1) {
+                                addMessage('system', "Can we move to the next question?");
+                                setIsWaitingForNextQuestion(true);
+                            } else {
+                                // Automatically trigger the "all reviewed" message from runNextStep
+                                runNextStep(qIdx + 1, 0);
+                            }
+                        }, 1000);
+                    }
+                }
             };
 
             const runAvatarIntroductions = async () => {
@@ -1588,12 +1615,6 @@ I could not make sense of what you wrote.
                     setIsWaitingForAvatarStart(false);
                     // Just call runNextStep with current state to pick up where it left off
                     runNextStep(currentQIndex, reviewStep, "");
-                    return;
-                }
-
-                if (isWaitingForJokerDecision) {
-                    const choice = (text.toLowerCase().includes('disagree') || text.toLowerCase().includes('no') || text.toLowerCase().includes('false') || text.toLowerCase().includes('trap')) ? 'disagree' : 'agree';
-                    handleJokerDecision(choice);
                     return;
                 }
 
@@ -1832,7 +1853,7 @@ I could not make sense of what you wrote.
             return (
                 <div className="app-root">
                     <header>
-                        <div className="logo">IStudy <span style={{ fontSize: '0.5em', opacity: 0.6, verticalAlign: 'middle', fontWeight: 'normal' }}>2.0</span></div>
+                        <div className="logo">IStudy <span style={{ fontSize: '0.5em', opacity: 0.6, verticalAlign: 'middle', fontWeight: 'normal' }}>1.21</span></div>
                     </header>
                     <main className="container">
                         <AnimatePresence mode="wait">
@@ -2140,122 +2161,70 @@ I could not make sense of what you wrote.
                     {
                         view === 'chat' && (
                             <div className="input-fixed-container">
-                                {isWaitingForJokerDecision ? (
-                                    <div className="input-box-wrapper" style={{ display: 'flex', gap: '12px', justifyContent: 'center', padding: '10px 16px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '16px' }}>
-                                        <button
-                                            className="btn-primary"
-                                            style={{
-                                                flex: 1,
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                gap: '8px',
-                                                padding: '12px 20px',
-                                                fontSize: '15px',
-                                                fontWeight: '600',
-                                                background: '#16a34a',
-                                                borderColor: '#16a34a',
-                                                borderRadius: '10px',
-                                                color: '#ffffff',
-                                                cursor: isProcessing ? 'not-allowed' : 'pointer',
-                                                opacity: isProcessing ? 0.6 : 1,
-                                                boxShadow: '0 2px 4px rgba(22, 163, 74, 0.2)'
+                                <div className="input-box-wrapper">
+
+                                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                                        <textarea
+                                            ref={inputRef}
+                                            className="input-box"
+                                            rows={1}
+                                            placeholder={isProcessing ? "Processing..." : "Type your response..."}
+                                            value={inputValue}
+                                            onChange={(e) => {
+                                                setInputValue(e.target.value);
                                             }}
-                                            onClick={() => handleJokerDecision('agree')}
-                                            disabled={isProcessing}
-                                        >
-                                            <span style={{ fontSize: '18px' }}>👍</span> Agree
-                                        </button>
-                                        <button
-                                            className="btn-primary"
-                                            style={{
-                                                flex: 1,
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                gap: '8px',
-                                                padding: '12px 20px',
-                                                fontSize: '15px',
-                                                fontWeight: '600',
-                                                background: '#dc2626',
-                                                borderColor: '#dc2626',
-                                                borderRadius: '10px',
-                                                color: '#ffffff',
-                                                cursor: isProcessing ? 'not-allowed' : 'pointer',
-                                                opacity: isProcessing ? 0.6 : 1,
-                                                boxShadow: '0 2px 4px rgba(220, 38, 38, 0.2)'
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter' && !e.shiftKey) {
+                                                    e.preventDefault();
+                                                    handleSend();
+                                                }
                                             }}
-                                            onClick={() => handleJokerDecision('disagree')}
-                                            disabled={isProcessing}
-                                        >
-                                            <span style={{ fontSize: '18px' }}>👎</span> Disagree
-                                        </button>
-                                    </div>
-                                ) : (
-                                    <div className="input-box-wrapper">
-                                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                                            <textarea
-                                                ref={inputRef}
-                                                className="input-box"
-                                                rows={1}
-                                                placeholder={isProcessing ? "Processing..." : "Type your response..."}
-                                                value={inputValue}
+                                            disabled={isProcessing || isSystemLocked}
+                                            style={{ marginBottom: '2px' }}
+                                        />
+                                        <div style={{ fontSize: '0.75rem', color: '#5b6b7f', display: 'flex', alignItems: 'center', marginTop: '4px' }}>
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '2px' }}>
+                                                <polyline points="18 15 12 9 6 15"></polyline>
+                                            </svg>
+                                            <select
+                                                value={selectedModel}
                                                 onChange={(e) => {
-                                                    setInputValue(e.target.value);
+                                                    setSelectedModel(e.target.value);
+                                                    localStorage.setItem('iStudy_preferred_model', e.target.value);
                                                 }}
-                                                onKeyDown={(e) => {
-                                                    if (e.key === 'Enter' && !e.shiftKey) {
-                                                        e.preventDefault();
-                                                        handleSend();
-                                                    }
+                                                style={{
+                                                    appearance: 'none',
+                                                    border: 'none',
+                                                    background: 'transparent',
+                                                    color: 'inherit',
+                                                    fontSize: 'inherit',
+                                                    fontWeight: '400',
+                                                    cursor: 'pointer',
+                                                    outline: 'none',
+                                                    fontFamily: 'inherit',
+                                                    paddingRight: '0'
                                                 }}
-                                                disabled={isProcessing || isSystemLocked}
-                                                style={{ marginBottom: '2px' }}
-                                            />
-                                            <div style={{ fontSize: '0.75rem', color: '#5b6b7f', display: 'flex', alignItems: 'center', marginTop: '4px' }}>
-                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '2px' }}>
-                                                    <polyline points="18 15 12 9 6 15"></polyline>
-                                                </svg>
-                                                <select
-                                                    value={selectedModel}
-                                                    onChange={(e) => {
-                                                        setSelectedModel(e.target.value);
-                                                        localStorage.setItem('iStudy_preferred_model', e.target.value);
-                                                    }}
-                                                    style={{
-                                                        appearance: 'none',
-                                                        border: 'none',
-                                                        background: 'transparent',
-                                                        color: 'inherit',
-                                                        fontSize: 'inherit',
-                                                        fontWeight: '400',
-                                                        cursor: 'pointer',
-                                                        outline: 'none',
-                                                        fontFamily: 'inherit',
-                                                        paddingRight: '0'
-                                                    }}
-                                                >
-                                                    {activeChain.length > 0 ? (
-                                                        activeChain.map((id, idx) => (
-                                                            <option key={id} value={id}>
-                                                                {id} {idx === 0 ? '(Primary Engine)' : '(Active Backup)'}
-                                                            </option>
-                                                        ))
-                                                    ) : (
-                                                        <>
-                                                            <option value="gemini-3.1-flash-lite">gemini-3.1-flash-lite (Primary)</option>
-                                                            <option value="gemini-3.5-flash-lite">gemini-3.5-flash-lite (Backup 1)</option>
-                                                            <option value="gemma-4-26b-a4b-it">gemma-4-26b-a4b-it (Backup 2)</option>
-                                                            <option value="gemma-4-31b-it">gemma-4-31b-it (Backup 3)</option>
-                                                        </>
-                                                    )}
-                                                </select>
-                                            </div>
+                                            >
+                                                {activeChain.length > 0 ? (
+                                                    activeChain.map((id, idx) => (
+                                                        <option key={id} value={id}>
+                                                            {id} {idx === 0 ? '(Primary Engine)' : '(Active Backup)'}
+                                                        </option>
+                                                    ))
+                                                ) : (
+                                                    <>
+                                                        <option value="gemini-3.1-flash-lite">gemini-3.1-flash-lite (Primary)</option>
+                                                        <option value="gemini-3.5-flash-lite">gemini-3.5-flash-lite (Backup 1)</option>
+                                                        <option value="gemma-4-26b-a4b-it">gemma-4-26b-a4b-it (Backup 2)</option>
+                                                        <option value="gemma-4-31b-it">gemma-4-31b-it (Backup 3)</option>
+                                                    </>
+                                                )}
+                                            </select>
                                         </div>
-                                        <button className="action-btn" onClick={handleVoiceInput} disabled={isProcessing} title="Dictate Response">🎤</button>
-                                        <button className="action-btn send-btn" onClick={handleSend} disabled={isProcessing}>➤</button>
                                     </div>
-                                )}
+                                    <button className="action-btn" onClick={handleVoiceInput} disabled={isProcessing} title="Dictate Response">🎤</button>
+                                    <button className="action-btn send-btn" onClick={handleSend} disabled={isProcessing}>➤</button>
+                                </div>
                             </div>
                         )
                     }

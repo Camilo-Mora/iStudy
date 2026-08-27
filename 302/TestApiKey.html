@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>iStudy - AI Proxy Infrastructure Test</title>
+    <title>iStudy - AI API Key & Proxy Infrastructure Test</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
@@ -20,7 +20,7 @@
             border-radius: 12px;
             box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
             padding: 30px;
-            max-width: 720px;
+            max-width: 760px;
             width: 100%;
             box-sizing: border-box;
         }
@@ -45,7 +45,13 @@
             margin-bottom: 6px;
         }
 
-        input[type="text"], select, textarea {
+        .input-row {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        input[type="text"], input[type="password"], select, textarea {
             width: 100%;
             padding: 10px 12px;
             border: 1px solid #cbd5e1;
@@ -56,42 +62,91 @@
             font-family: inherit;
         }
 
-        input[type="text"]:focus, select:focus, textarea:focus {
+        input:focus, select:focus, textarea:focus {
             outline: none;
             border-color: #3b82f6;
             background: #ffffff;
         }
 
-        .button-group {
-            display: flex;
-            gap: 10px;
-            margin-top: 15px;
-        }
-
-        button {
-            background-color: #2563eb;
-            color: white;
-            border: none;
-            padding: 12px 24px;
+        .toggle-btn {
+            background: #f1f5f9;
+            border: 1px solid #cbd5e1;
+            color: #475569;
+            padding: 9px 14px;
             border-radius: 8px;
-            font-size: 1rem;
-            font-weight: 600;
             cursor: pointer;
+            font-size: 0.85rem;
+            white-space: nowrap;
+            font-weight: 500;
             transition: background-color 0.15s;
         }
 
-        button:hover {
+        .toggle-btn:hover {
+            background: #e2e8f0;
+        }
+
+        .button-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-top: 20px;
+        }
+
+        button.action-btn {
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.15s, opacity 0.15s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-direct {
+            background-color: #059669;
+        }
+        .btn-direct:hover {
+            background-color: #047857;
+        }
+
+        .btn-proxy {
+            background-color: #2563eb;
+        }
+        .btn-proxy:hover {
             background-color: #1d4ed8;
         }
 
         button:disabled {
-            background-color: #94a3b8;
+            background-color: #94a3b8 !important;
             cursor: not-allowed;
+            opacity: 0.8;
+        }
+
+        .badge {
+            display: inline-block;
+            font-size: 0.75rem;
+            padding: 2px 8px;
+            border-radius: 9999px;
+            font-weight: 600;
+            margin-left: 6px;
+            vertical-align: middle;
+        }
+        .badge-direct {
+            background-color: #d1fae5;
+            color: #065f46;
+        }
+        .badge-proxy {
+            background-color: #dbeafe;
+            color: #1e40af;
         }
 
         .status-box {
             margin-top: 20px;
-            padding: 15px;
+            padding: 16px;
             border-radius: 8px;
             font-size: 0.95rem;
             line-height: 1.5;
@@ -124,7 +179,7 @@
             padding: 15px;
             border-radius: 8px;
             overflow-x: auto;
-            max-height: 280px;
+            max-height: 300px;
             white-space: pre-wrap;
             margin-top: 15px;
             display: none;
@@ -133,18 +188,36 @@
 </head>
 <body>
     <div class="container">
-        <h1>🧪 iStudy AI Infrastructure Test</h1>
-        <p style="font-size: 0.9rem; color: #64748b;">
-            This barebones tool sends a single test request to your Google Apps Script backend, which reads your API key from the Google Sheet (<code>API_Key!A1</code>) and queries the Gemini model.
+        <h1>🧪 iStudy AI API & Infrastructure Test</h1>
+        <p style="font-size: 0.9rem; color: #64748b; margin-bottom: 22px;">
+            Test and benchmark queries to Google Gemini directly using a manually entered API key or via your Google Apps Script proxy (Google Sheet <code>API_Key!A1</code>).
         </p>
 
+        <!-- Manual API Key Input Section -->
         <div class="section">
-            <label>Google Apps Script Web App URL</label>
+            <label for="manualApiKey">
+                🔑 Manual Gemini API Key <span class="badge badge-direct">Direct Mode</span>
+            </label>
+            <div class="input-row">
+                <input type="password" id="manualApiKey" placeholder="Paste your Google Gemini API key (AIzaSy...)" autocomplete="off" />
+                <button type="button" class="toggle-btn" id="toggleKeyBtn" onclick="toggleKeyVisibility()">👁️ Show</button>
+            </div>
+            <small style="color: #64748b; font-size: 0.8rem; margin-top: 4px; display: block;">
+                Auto-saved in browser <code>localStorage</code> for quick testing.
+            </small>
+        </div>
+
+        <!-- Google Apps Script URL Section -->
+        <div class="section">
+            <label for="scriptUrl">
+                ☁️ Google Apps Script Web App URL <span class="badge badge-proxy">Proxy Mode</span>
+            </label>
             <input type="text" id="scriptUrl" value="https://script.google.com/macros/s/AKfycbz5z-WPUT6f5hNGzXVSwVnPtndmNCA_QLMegG4ZiPtmyCz2ctPF6XOkCrfOxXoe59JvTA/exec" />
         </div>
 
+        <!-- Model Selection Section -->
         <div class="section">
-            <label>Target Model</label>
+            <label for="modelSelect">Target Model</label>
             <select id="modelSelect">
                 <option value="gemini-3.1-flash-lite" selected>gemini-3.1-flash-lite (Recommended)</option>
                 <option value="gemini-3.5-flash-lite">gemini-3.5-flash-lite</option>
@@ -154,36 +227,176 @@
             </select>
         </div>
 
+        <!-- Prompt Input Section -->
         <div class="section">
-            <label>Prompt</label>
+            <label for="promptInput">Prompt</label>
             <textarea id="promptInput" rows="3">what is the capital of Colombia. give me just a name as a response</textarea>
         </div>
 
+        <!-- Action Buttons -->
         <div class="button-group">
-            <button id="sendBtn" onclick="sendTestRequest()">🚀 Send Test Request</button>
+            <button id="directBtn" class="action-btn btn-direct" onclick="sendDirectRequest()">
+                ⚡ Test Direct (Manual Key)
+            </button>
+            <button id="proxyBtn" class="action-btn btn-proxy" onclick="sendProxyRequest()">
+                🚀 Test via Apps Script (Sheet Key)
+            </button>
         </div>
 
+        <!-- Status & Results Box -->
         <div id="statusBox" class="status-box"></div>
 
+        <!-- Raw JSON Log Box -->
         <div id="logBox" class="log-box"></div>
     </div>
 
     <script>
-        async function sendTestRequest() {
-            const sendBtn = document.getElementById('sendBtn');
+        // Load saved API key on startup
+        window.addEventListener('DOMContentLoaded', () => {
+            const savedKey = localStorage.getItem('istudy_test_gemini_key');
+            if (savedKey) {
+                document.getElementById('manualApiKey').value = savedKey;
+            }
+        });
+
+        // Save key when user types
+        document.getElementById('manualApiKey').addEventListener('input', (e) => {
+            localStorage.setItem('istudy_test_gemini_key', e.target.value.trim());
+        });
+
+        function toggleKeyVisibility() {
+            const keyInput = document.getElementById('manualApiKey');
+            const toggleBtn = document.getElementById('toggleKeyBtn');
+            if (keyInput.type === 'password') {
+                keyInput.type = 'text';
+                toggleBtn.textContent = '🔒 Hide';
+            } else {
+                keyInput.type = 'password';
+                toggleBtn.textContent = '👁️ Show';
+            }
+        }
+
+        function setButtonsState(disabled) {
+            document.getElementById('directBtn').disabled = disabled;
+            document.getElementById('proxyBtn').disabled = disabled;
+        }
+
+        // --- DIRECT GEMINI API REQUEST (Using Manual Key) ---
+        async function sendDirectRequest() {
+            const apiKey = document.getElementById('manualApiKey').value.trim();
+            const model = document.getElementById('modelSelect').value;
+            const promptText = document.getElementById('promptInput').value.trim();
             const statusBox = document.getElementById('statusBox');
             const logBox = document.getElementById('logBox');
+
+            if (!apiKey) {
+                alert('Please paste a Gemini API Key in the manual key box first.');
+                document.getElementById('manualApiKey').focus();
+                return;
+            }
+
+            if (!promptText) {
+                alert('Please enter a prompt.');
+                return;
+            }
+
+            setButtonsState(true);
+            statusBox.style.display = 'block';
+            statusBox.className = 'status-box status-loading';
+            statusBox.innerHTML = `⏳ <strong>Sending direct request to Google Gemini API...</strong><br>Bypassing Google Apps Script. Calling <code>${escapeHtml(model)}</code> directly.`;
+            logBox.style.display = 'none';
+            logBox.textContent = '';
+
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+            const payload = {
+                contents: [
+                    {
+                        parts: [
+                            { text: promptText }
+                        ]
+                    }
+                ]
+            };
+
+            const startTime = performance.now();
+
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const rawText = await response.text();
+                const elapsed = ((performance.now() - startTime) / 1000).toFixed(2);
+
+                let data;
+                try {
+                    data = JSON.parse(rawText);
+                } catch (e) {
+                    statusBox.className = 'status-box status-error';
+                    statusBox.innerHTML = `❌ <strong>Invalid Response from Gemini API (${elapsed}s)</strong>`;
+                    logBox.style.display = 'block';
+                    logBox.textContent = rawText;
+                    return;
+                }
+
+                if (!response.ok || data.error) {
+                    const errorMsg = data.error?.message || `HTTP ${response.status} ${response.statusText}`;
+                    statusBox.className = 'status-box status-error';
+                    statusBox.innerHTML = `❌ <strong>Gemini API Error:</strong> (${elapsed}s)<br><br><code>${escapeHtml(errorMsg)}</code>`;
+                    logBox.style.display = 'block';
+                    logBox.textContent = JSON.stringify(data, null, 2);
+                    return;
+                }
+
+                const candidate = data.candidates?.[0];
+                const parts = candidate?.content?.parts || [];
+                const responseText = parts.map(p => p.text || '').join('').trim();
+
+                if (responseText) {
+                    statusBox.className = 'status-box status-success';
+                    statusBox.innerHTML = `⚡ <strong>Direct Call Success! (${elapsed}s)</strong> &bull; <span class="badge badge-direct">Direct Mode</span><br><br>` +
+                        `<strong>AI Answer:</strong><br>` +
+                        `<div style="font-size: 1.25rem; font-weight: bold; margin-top: 8px; color: #047857;">${escapeHtml(responseText)}</div>`;
+                } else {
+                    statusBox.className = 'status-box status-error';
+                    statusBox.innerHTML = `⚠️ <strong>Model responded, but content was empty.</strong> (${elapsed}s)`;
+                }
+
+                logBox.style.display = 'block';
+                logBox.textContent = "FULL RESPONSE JSON FROM GEMINI:\n" + JSON.stringify(data, null, 2);
+
+            } catch (err) {
+                const elapsed = ((performance.now() - startTime) / 1000).toFixed(2);
+                statusBox.className = 'status-box status-error';
+                statusBox.innerHTML = `❌ <strong>Direct Request Network Error (${elapsed}s):</strong><br>${escapeHtml(err.message || String(err))}`;
+                logBox.style.display = 'block';
+                logBox.textContent = err.stack || String(err);
+            } finally {
+                setButtonsState(false);
+            }
+        }
+
+        // --- PROXY GEMINI REQUEST (Via Google Apps Script & Sheet Key) ---
+        async function sendProxyRequest() {
             const scriptUrl = document.getElementById('scriptUrl').value.trim();
             const model = document.getElementById('modelSelect').value;
             const promptText = document.getElementById('promptInput').value.trim();
+            const statusBox = document.getElementById('statusBox');
+            const logBox = document.getElementById('logBox');
 
             if (!scriptUrl) {
                 alert('Please enter your Google Apps Script URL.');
                 return;
             }
 
-            // Reset UI
-            sendBtn.disabled = true;
+            if (!promptText) {
+                alert('Please enter a prompt.');
+                return;
+            }
+
+            setButtonsState(true);
             statusBox.style.display = 'block';
             statusBox.className = 'status-box status-loading';
             statusBox.innerHTML = '⏳ <strong>Sending request to Apps Script...</strong><br>Apps Script will fetch the API key from <code>API_Key!A1</code> and query Google Gemini.';
@@ -219,11 +432,10 @@
                     return;
                 }
 
-                // Check for errors returned by Apps Script or Gemini
                 if (data.status === 'error' || data.error) {
                     const errorMsg = data.error?.message || data.message || JSON.stringify(data);
                     statusBox.className = 'status-box status-error';
-                    statusBox.innerHTML = `❌ <strong>Error from Backend:</strong> (${elapsed}s)<br><br><code>${escapeHtml(errorMsg)}</code><br><br>` +
+                    statusBox.innerHTML = `❌ <strong>Error from Apps Script Backend:</strong> (${elapsed}s)<br><br><code>${escapeHtml(errorMsg)}</code><br><br>` +
                         `<strong>Troubleshooting Checklist:</strong><br>` +
                         `1. Ensure the sheet tab is named exactly <code>API_Key</code>.<br>` +
                         `2. Ensure cell <code>A1</code> contains your valid Google AI Studio API key.<br>` +
@@ -233,14 +445,13 @@
                     return;
                 }
 
-                // Extract text from Gemini response structure
                 const candidate = data.candidates?.[0];
                 const parts = candidate?.content?.parts || [];
                 const responseText = parts.map(p => p.text || '').join('').trim();
 
                 if (responseText) {
                     statusBox.className = 'status-box status-success';
-                    statusBox.innerHTML = `✅ <strong>Success! Response received in ${elapsed}s</strong><br><br>` +
+                    statusBox.innerHTML = `🚀 <strong>Proxy Call Success! (${elapsed}s)</strong> &bull; <span class="badge badge-proxy">Proxy Mode</span><br><br>` +
                         `<strong>AI Answer:</strong><br>` +
                         `<div style="font-size: 1.25rem; font-weight: bold; margin-top: 8px; color: #047857;">${escapeHtml(responseText)}</div>`;
                 } else {
@@ -259,7 +470,7 @@
                 logBox.style.display = 'block';
                 logBox.textContent = "ERROR STACK:\n" + netErr.stack;
             } finally {
-                sendBtn.disabled = false;
+                setButtonsState(false);
             }
         }
 
