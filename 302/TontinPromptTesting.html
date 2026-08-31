@@ -395,7 +395,7 @@
         /* Multi-Card Grid for Comparisons */
         .experiment-grid {
             display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
             gap: 14px;
             margin-top: 16px;
         }
@@ -483,7 +483,8 @@
             <div class="section">
                 <label>Target Model to Test</label>
                 <select id="modelSelect" onchange="updatePromptPreview()">
-                    <option value="gemini-3.1-flash-lite" selected>gemini-3.1-flash-lite (Cheapest Good Option &bull; $0.25 / $1.50 per 1M)</option>
+                    <option value="gemini-2.5-flash-lite" selected>gemini-2.5-flash-lite (Ultra Budget &bull; $0.10 / $0.40 per 1M)</option>
+                    <option value="gemini-3.1-flash-lite">gemini-3.1-flash-lite (Balanced Option &bull; $0.25 / $1.50 per 1M)</option>
                     <option value="gemini-3.5-flash-lite">gemini-3.5-flash-lite (High-Throughput Grading &bull; $0.30 / $2.50 per 1M)</option>
                     <option value="gemini-3.6-flash">gemini-3.6-flash (Flagship Workhorse &bull; $0.75 / $3.75 per 1M)</option>
                     <option value="gemma-4-26b-a4b-it">gemma-4-26b-a4b-it (Open Weights 26B &bull; Slow)</option>
@@ -541,7 +542,7 @@
         <!-- Actions -->
         <div class="button-group">
             <button id="sendBtn" onclick="runSingleBenchmark()">🚀 Test Selected Model & Treatment</button>
-            <button id="cmpBtn" class="btn-compare-models" onclick="runCompareModelsBenchmark()">⚡ Compare Top 3 Gemini Models</button>
+            <button id="cmpBtn" class="btn-compare-models" onclick="runCompareModelsBenchmark()">⚡ Compare Gemini Models</button>
             <button id="expBtn" class="btn-experiment" onclick="runAll3TreatmentsExperiment()">🔬 Run 3-Treatment Token Experiment</button>
             <button class="secondary-btn" onclick="resetDefaults()">🔄 Reset Sample Data</button>
         </div>
@@ -568,13 +569,22 @@
                 <tbody>
                     <tr class="highlight-cheapest">
                         <td>
+                            <strong>gemini-2.5-flash-lite</strong>
+                            <span class="badge-cheapest">CHEAPEST</span>
+                        </td>
+                        <td>$0.10 / $0.40</td>
+                        <td>⚡ ~1.5–2.5s</td>
+                        <td><strong>~$0.012</strong> (1.2¢)</td>
+                        <td><strong style="color: #059669;">~$2.31 / lecture</strong></td>
+                    </tr>
+                    <tr>
+                        <td>
                             <strong>gemini-3.1-flash-lite</strong>
-                            <span class="badge-cheapest">RECOMMENDED</span>
                         </td>
                         <td>$0.25 / $1.50</td>
                         <td>⚡ ~2–3s</td>
-                        <td><strong>~$0.036</strong> (3.6¢)</td>
-                        <td><strong style="color: #059669;">~$7.16 / lecture</strong></td>
+                        <td>~$0.036 (3.6¢)</td>
+                        <td><strong>~$7.16 / lecture</strong></td>
                     </tr>
                     <tr>
                         <td><strong>gemini-3.5-flash-lite</strong></td>
@@ -610,6 +620,7 @@
         let currentTreatment = 'T1';
 
         const MODEL_RATES = {
+            'gemini-2.5-flash-lite': { inputPerM: 0.10, outputPerM: 0.40, name: 'Gemini 2.5 Flash-Lite' },
             'gemini-3.1-flash-lite': { inputPerM: 0.25, outputPerM: 1.50, name: 'Gemini 3.1 Flash-Lite' },
             'gemini-3.5-flash-lite': { inputPerM: 0.30, outputPerM: 2.50, name: 'Gemini 3.5 Flash-Lite' },
             'gemini-3.6-flash': { inputPerM: 0.75, outputPerM: 3.75, name: 'Gemini 3.6 Flash' },
@@ -870,7 +881,8 @@ Please keep your response academic yet engaging, and stay strictly within the co
             logBox.style.display = 'none';
 
             const modelsToTest = [
-                { id: 'gemini-3.1-flash-lite', label: 'Gemini 3.1 Flash-Lite (Cheapest)' },
+                { id: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash-Lite (Cheapest)' },
+                { id: 'gemini-3.1-flash-lite', label: 'Gemini 3.1 Flash-Lite (Balanced)' },
                 { id: 'gemini-3.5-flash-lite', label: 'Gemini 3.5 Flash-Lite (Grading)' },
                 { id: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash (Flagship)' }
             ];
@@ -882,7 +894,7 @@ Please keep your response academic yet engaging, and stay strictly within the co
 
                 for (let i = 0; i < modelsToTest.length; i++) {
                     const m = modelsToTest[i];
-                    statusBox.innerHTML = `⏳ <strong>Comparing Model ${i + 1} of 3:</strong> Testing <code>${m.id}</code>...<br><span style="font-size: 0.85rem; color: #64748b;">Measuring speed, token consumption, and quality.</span>`;
+                    statusBox.innerHTML = `⏳ <strong>Comparing Model ${i + 1} of ${modelsToTest.length}:</strong> Testing <code>${m.id}</code>...<br><span style="font-size: 0.85rem; color: #64748b;">Measuring speed, token consumption, and quality.</span>`;
                     
                     const res = await queryBackend(scriptUrl, m.id, prompt);
                     const costs = calculateLiveCost(m.id, res.promptTokens, res.outputTokens);
