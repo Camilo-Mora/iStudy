@@ -1045,7 +1045,7 @@
                 const isTxt = ['.txt', '.md'].some(ext => file.name.toLowerCase().endsWith(ext));
 
                 if (!isImage && !isTxt) {
-                    addMessage('system', "### ⚠️ Unsupported File Format\n\nThis app takes a .txt file. In programs like Excel or Word, click on "Save as", then select text file (.txt).");
+                    addMessage('system', "### ⚠️ Unsupported File Format\n\nThis app takes a .txt file. In programs like Excel or Word, click on 'Save as', then select text file (.txt).");
                     addMessage('system', null, 'reupload_action');
                     return;
                 }
@@ -1065,7 +1065,7 @@
                         addMessage('system', "I couldn't find a chapter number in your file. Which chapter is this for? (e.g., 1)");
                     }
                 } catch (err) {
-                    addMessage('system', "### ⚠️ Unsupported File Format\n\nThis app takes a .txt file. In programs like Excel or Word, click on "Save as", then select text file (.txt).");
+                    addMessage('system', "### ⚠️ Unsupported File Format\n\nThis app takes a .txt file. In programs like Excel or Word, click on 'Save as', then select text file (.txt).");
                     addMessage('system', null, 'reupload_action');
                 } finally {
                     setIsProcessing(false);
