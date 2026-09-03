@@ -340,13 +340,7 @@
                             })
                         });
 
-                        const rawText = await response.text();
-                        let data;
-                        try {
-                            data = JSON.parse(rawText);
-                        } catch (parseErr) {
-                            throw new Error(`Server returned unparseable response (${response.status || 'OK'})`);
-                        }
+                        const data = await response.json();
 
                         if (data.error) {
                             const msg = data.error.message || JSON.stringify(data.error);
@@ -374,8 +368,6 @@
                         const errStr = `[${currentModel} Net]: ${msg}`;
                         console.warn(errStr);
                         errorLog.push(errStr);
-                        // Short pause between model retries to allow transient network/WiFi hiccups to clear
-                        await new Promise(resolve => setTimeout(resolve, 500));
                         continue;
                     }
                 }
@@ -398,9 +390,7 @@
                             headers: { 'Content-Type': 'text/plain' },
                             body: JSON.stringify({ action: 'proxyGemini', model: modelId, promptText: 'ping' })
                         });
-                        const rawText = await res.text();
-                        let data;
-                        try { data = JSON.parse(rawText); } catch(e) { return { active: false }; }
+                        const data = await res.json();
                         if (data.error) {
                             const msg = data.error.message?.toLowerCase() || '';
                             if (msg.includes('permission') || msg.includes('quota') || msg.includes('exhausted') || msg.includes('not found')) return { active: false };
@@ -423,9 +413,7 @@
                             headers: { 'Content-Type': 'text/plain' },
                             body: JSON.stringify({ action: 'proxyGemini', model: judgeModelId, promptText: prompt })
                         });
-                        const rawText = await res.text();
-                        let data;
-                        try { data = JSON.parse(rawText); } catch(e) { return null; }
+                        const data = await res.json();
                         const text = window.Core.CleanResponseText(data);
                         const rankMatch = text.match(/\[(.*?)\]/);
                         const reasonMatch = text.split('| Reason:')[1] || "AI-Judged order based on internal benchmarks.";
@@ -512,9 +500,7 @@
                         headers: { 'Content-Type': 'text/plain' },
                         body: JSON.stringify({ action: 'requestOTP', email: email })
                     });
-                    const rawText = await response.text();
-                    let data;
-                    try { data = JSON.parse(rawText); } catch(e) { return { status: 'error', message: "Invalid server response. Please try again." }; }
+                    const data = await response.json();
                     return data;
                 } catch (err) {
                     console.error("Email verification error:", err);
@@ -529,9 +515,7 @@
                         headers: { 'Content-Type': 'text/plain' },
                         body: JSON.stringify({ action: 'verifyOTP', email: email, otp: code })
                     });
-                    const rawText = await response.text();
-                    let data;
-                    try { data = JSON.parse(rawText); } catch(e) { return { status: 'error', message: "Invalid server response. Please try again." }; }
+                    const data = await response.json();
                     return data;
                 } catch (err) {
                     return { status: 'error', message: err.toString() };
@@ -554,9 +538,7 @@
                         headers: { 'Content-Type': 'text/plain' },
                         body: JSON.stringify(payload)
                     });
-                    const rawText = await response.text();
-                    let data;
-                    try { data = JSON.parse(rawText); } catch(e) { return { status: 'error', message: "Submission failed: non-JSON server response." }; }
+                    const data = await response.json();
                     return data;
                 } catch (err) {
                     console.error("RegisterCompletion Error:", err);
@@ -939,8 +921,8 @@
                     const text = window.Core.CleanResponseText(data);
                     if (!text) {
                         console.warn("Safety block or empty response detected after all retries.");
-                        addMessage('system', "ℹ️ *The AI had trouble formulating a phrasing for this specific point. Moving forward so you can continue without delay.*");
-                        return "I'm having a little trouble with my phrasing on this one—let's keep going so we stay on track!";
+                        addMessage('system', "⚠️ **Interaction Filtered:** The AI's safety guardrails paused this specific response. We attempted to use different models, but the content remained restricted. **Please take a screenshot of this conversation and send it to Dr. Mora.** Let's try to continue.");
+                        return "I apologize, but I'm having trouble phrasing my next point. Let's just move forward to ensure we cover everything!";
                     }
 
                     return text;
@@ -955,11 +937,11 @@
                     }
 
                     if (msg.includes("SAFETY_BLOCK") || msg.includes("EMPTY_CONTENT")) {
-                        addMessage('system', "ℹ️ *The AI had trouble formulating a phrasing for this specific point. Moving forward so you can continue without delay.*");
+                        addMessage('system', "⚠️ **Interaction Filtered:** The AI's safety guardrails paused this specific response. We attempted to use different models, but the content remained restricted. **Please take a screenshot of this conversation and send it to Dr. Mora.** Let's try to move on.");
                         return "I'm having a little trouble with my phrasing on this one—let's keep going so we stay on track!";
                     }
 
-                    addMessage('system', `⚠️ **Connection Note:** The response took longer than expected or the connection was briefly interrupted. Please check your internet connection and try sending your message again.`);
+                    addMessage('system', `System Error: ${msg}`);
                     return null;
                 }
             };
@@ -1392,30 +1374,8 @@ I could not make sense of what you wrote.
 (Start your response here based on the student's message)
 `;
 
-                        let tontinEval = null;
-                        try {
-                            tontinEval = await invokeLLM(tontinEvalPrompt, commonContext);
-                        } catch (e) {
-                            console.warn("Tontin first attempt error:", e);
-                        }
-
-                        // Auto-retry once if first attempt was empty, null, or fallback string
-                        if (!tontinEval || tontinEval.includes("trouble with my phrasing")) {
-                            try {
-                                await new Promise(r => setTimeout(r, 600));
-                                const retryResult = await invokeLLM(tontinEvalPrompt, commonContext);
-                                if (retryResult && !retryResult.includes("trouble with my phrasing")) {
-                                    tontinEval = retryResult;
-                                }
-                            } catch (e) {
-                                console.warn("Tontin retry attempt error:", e);
-                            }
-                        }
-
-                        // If still unavailable, use graceful pre-computed educational response with Model Answer
-                        if (!tontinEval || tontinEval.includes("trouble with my phrasing")) {
-                            tontinEval = `Thanks for explaining that in your own words!\n\n**Key concepts to keep in mind:**\n\n✅ ${analysis.model_answer}\n\n**My assessment:** I'm following better now—let's keep moving!`;
-                        }
+                        const tontinEval = await invokeLLM(tontinEvalPrompt, commonContext);
+                        if (!tontinEval) return; // HALT if Locked
 
                         addMessage('tontin', tontinEval);
 
