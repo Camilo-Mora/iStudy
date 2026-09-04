@@ -444,7 +444,7 @@
                                     Click to Browse or Drag & Drop all 13 Report Files here (.txt)
                                 </div>
                                 <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
-                                    You can select multiple files at once. The app will automatically verify student ID and completion codes locally.
+                                    You can select multiple files at once.
                                 </div>
                             </div>
 
@@ -479,17 +479,15 @@
                                     2. Enter YouTube Video Links (Min. 6)
                                 </h3>
                                 <p style={{ fontSize: '13px', color: '#64748b', marginTop: 0, marginBottom: '20px' }}>
-                                    Select the chapter for each video you recorded. Verification codes are automatically populated from your verified reports.
+                                    Select the chapter for each video you recorded and paste in the YouTube URL.
                                 </p>
 
-                                <div className="video-form-grid" style={{ display: 'grid', gridTemplateColumns: '150px 140px 1fr 36px', gap: '10px', alignItems: 'center', marginBottom: '16px' }}>
+                                <div className="video-form-grid" style={{ display: 'grid', gridTemplateColumns: '150px 1fr 36px', gap: '10px', alignItems: 'center', marginBottom: '16px' }}>
                                     <div className="grid-header" style={{ fontSize: '12px', fontWeight: '700', color: '#475569' }}>Chapter</div>
-                                    <div className="grid-header" style={{ fontSize: '12px', fontWeight: '700', color: '#475569' }}>Code (Auto)</div>
                                     <div className="grid-header" style={{ fontSize: '12px', fontWeight: '700', color: '#475569' }}>YouTube URL</div>
                                     <div></div>
 
                                     {videoRows.map((row, idx) => {
-                                        const codeForCh = row.chapter && chapterFiles[row.chapter]?.code;
                                         const isValidUrl = isValidYouTubeUrl(row.url);
                                         return (
                                             <React.Fragment key={idx}>
@@ -507,24 +505,6 @@
                                                         return <option key={chNum} value={chNum}>Chapter {chNum}</option>;
                                                     })}
                                                 </select>
-
-                                                <input
-                                                    type="text"
-                                                    readOnly
-                                                    value={codeForCh ? `${codeForCh.slice(0, 3)}...${codeForCh.slice(-4)}` : '—'}
-                                                    title={codeForCh || 'Select chapter first'}
-                                                    style={{
-                                                        padding: '10px',
-                                                        borderRadius: '10px',
-                                                        border: '1px solid #e2e8f0',
-                                                        background: codeForCh ? '#f0fdf4' : '#f8fafc',
-                                                        color: codeForCh ? '#166534' : '#94a3b8',
-                                                        fontFamily: 'monospace',
-                                                        fontSize: '12px',
-                                                        fontWeight: '700',
-                                                        textAlign: 'center'
-                                                    }}
-                                                />
 
                                                 <input
                                                     type="text"
