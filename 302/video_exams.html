@@ -15,9 +15,87 @@
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://unpkg.com/framer-motion@10.16.4/dist/framer-motion.js"></script>
-    <script src="https://unpkg.com/react-markdown@8.0.7/react-markdown.min.js"></script>
     <style>
-        /* Tooltip Styles */
+        .file-drop-zone {
+            border: 2px dashed #93c5fd;
+            border-radius: 16px;
+            padding: 24px 20px;
+            background: #f0f9ff;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            margin-bottom: 20px;
+        }
+
+        .file-drop-zone:hover, .file-drop-zone.dragover {
+            border-color: #2563eb;
+            background: #e0f2fe;
+            transform: scale(1.01);
+        }
+
+        .chapters-badge-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(65px, 1fr));
+            gap: 8px;
+            margin-top: 14px;
+        }
+
+        .chapter-pill {
+            padding: 8px 4px;
+            border-radius: 10px;
+            font-size: 12px;
+            font-weight: 600;
+            text-align: center;
+            border: 1px solid #e2e8f0;
+            background: #ffffff;
+            color: #64748b;
+            transition: all 0.2s ease;
+        }
+
+        .chapter-pill.verified {
+            background: #dcfce7;
+            border-color: #86efac;
+            color: #166534;
+        }
+
+        .rubric-tier-card {
+            padding: 12px 14px;
+            border-radius: 12px;
+            margin-bottom: 10px;
+            border: 1px solid #e2e8f0;
+            background: #f8fafc;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.25s ease;
+        }
+
+        .rubric-tier-card.active {
+            background: #f0fdf4;
+            border-color: #22c55e;
+            box-shadow: 0 4px 12px rgba(34, 197, 94, 0.15);
+        }
+
+        .rubric-tier-target {
+            font-size: 15px;
+            font-weight: 700;
+            color: #0f172a;
+        }
+
+        .rubric-tier-badge {
+            font-size: 12px;
+            font-weight: 600;
+            padding: 3px 8px;
+            border-radius: 6px;
+            background: #e2e8f0;
+            color: #475569;
+        }
+
+        .rubric-tier-card.active .rubric-tier-badge {
+            background: #16a34a;
+            color: #ffffff;
+        }
+
         .info-tooltip {
             position: relative;
             display: inline-flex;
@@ -26,7 +104,6 @@
             color: #94a3b8;
             font-size: 13px;
             vertical-align: middle;
-            transition: color 0.2s;
         }
 
         .info-tooltip:hover {
@@ -35,7 +112,7 @@
 
         .info-tooltip .tooltiptext {
             visibility: hidden;
-            width: 220px;
+            width: 240px;
             background-color: #0f172a;
             color: #fff;
             text-align: center;
@@ -45,7 +122,7 @@
             z-index: 1000;
             bottom: 125%;
             left: 50%;
-            margin-left: -110px;
+            margin-left: -120px;
             opacity: 0;
             transition: opacity 0.3s, transform 0.3s;
             transform: translateY(10px);
@@ -54,8 +131,6 @@
             line-height: 1.5;
             pointer-events: none;
             box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-            text-transform: none;
-            /* Grid header is uppercase, we want normal text here */
         }
 
         .info-tooltip .tooltiptext::after {
@@ -82,64 +157,36 @@
 
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
-        console.log("Video Exam Portal script initialized.");
         const { motion, AnimatePresence } = window.Motion || { motion: (p) => <div {...p} />, AnimatePresence: (p) => p.children };
 
-        // Core and Fetch Logic
+        // Core submission relay
         window.Core = window.Core || {
-            VerifyStudentEmail: async (email) => {
+            SubmitVideoPortfolio: async (email, videos) => {
                 const scriptUrl = 'https://script.google.com/macros/s/AKfycbz5z-WPUT6f5hNGzXVSwVnPtndmNCA_QLMegG4ZiPtmyCz2ctPF6XOkCrfOxXoe59JvTA/exec';
+                const payload = {
+                    action: 'submitVideoPortfolioEmail',
+                    email: email,
+                    studentId: email,
+                    videos: videos
+                };
                 try {
                     const response = await fetch(scriptUrl, {
                         method: 'POST',
                         headers: { 'Content-Type': 'text/plain' },
-                        body: JSON.stringify({ action: 'requestOTP', email: email })
+                        body: JSON.stringify(payload)
                     });
-                    const data = await response.json();
+                    const rawText = await response.text();
+                    let data;
+                    try { data = JSON.parse(rawText); } catch (e) { return { status: 'error', message: "Non-JSON server response." }; }
                     return data;
                 } catch (err) {
+                    console.error("SubmitVideoPortfolio Error:", err);
                     return { status: 'error', message: err.toString() };
-                }
-            },
-            VerifyOTP: async (email, code) => {
-                const scriptUrl = 'https://script.google.com/macros/s/AKfycbz5z-WPUT6f5hNGzXVSwVnPtndmNCA_QLMegG4ZiPtmyCz2ctPF6XOkCrfOxXoe59JvTA/exec';
-                try {
-                    const response = await fetch(scriptUrl, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'text/plain' },
-                        body: JSON.stringify({ action: 'verifyOTP', email: email, otp: code })
-                    });
-                    const data = await response.json();
-                    return data;
-                } catch (err) {
-                    return { status: 'error', message: err.toString() };
-                }
-            },
-            FetchRoadmapData: async (email) => {
-                const scriptUrl = 'https://script.google.com/macros/s/AKfycbz5z-WPUT6f5hNGzXVSwVnPtndmNCA_QLMegG4ZiPtmyCz2ctPF6XOkCrfOxXoe59JvTA/exec';
-                try {
-                    const response = await fetch(scriptUrl, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'text/plain' },
-                        body: JSON.stringify({ action: 'getStatus', email: email })
-                    });
-                    const data = await response.json();
-                    return data;
-                } catch (err) {
-                    console.error("Fetch Roadmap Error:", err);
-                    throw err;
                 }
             }
         };
 
-
         function App() {
-            const [view, setView] = useState('video_portal');
-            const [showSettings, setShowSettings] = useState(false);
-            const [apiKeys, setApiKeys] = useState([]);
-            const [tempKey, setTempKey] = useState('');
-            const [extraKeys, setExtraKeys] = useState([]);
-
             const [videoCheckEmail, setVideoCheckEmail] = useState(() => {
                 return new URLSearchParams(window.location.search).get('email') || '';
             });
@@ -151,155 +198,174 @@
                 }
             }, [videoCheckEmail]);
 
+            const [chapterFiles, setChapterFiles] = useState({});
+            const [fileErrors, setFileErrors] = useState([]);
+            const [isDragging, setIsDragging] = useState(false);
+            const fileInputRef = useRef(null);
+
             const [videoRows, setVideoRows] = useState([
-                { chapter: '', url: '', code: '' }, { chapter: '', url: '', code: '' }, { chapter: '', url: '', code: '' },
-                { chapter: '', url: '', code: '' }, { chapter: '', url: '', code: '' }, { chapter: '', url: '', code: '' }
+                { chapter: '', url: '' },
+                { chapter: '', url: '' },
+                { chapter: '', url: '' },
+                { chapter: '', url: '' },
+                { chapter: '', url: '' },
+                { chapter: '', url: '' }
             ]);
+
             const [isVideoSubmitting, setIsVideoSubmitting] = useState(false);
             const [showVideoSuccess, setShowVideoSuccess] = useState(false);
-            const [finalProjectedGrade, setFinalProjectedGrade] = useState('');
-            const [roadmapData, setRoadmapData] = useState(null);
+            const [submittedVideoCount, setSubmittedVideoCount] = useState(0);
 
-            // Load roadmap data for the scoreboard if needed (optional since we have student email)
-            useEffect(() => {
-                if (videoCheckEmail) {
-                    window.Core.FetchRoadmapData(videoCheckEmail).then(res => {
-                        if (res.status === 'success') {
-                            setRoadmapData(res.completion);
-                        }
-                    }).catch(console.error);
-                }
-            }, [videoCheckEmail]);
+            // Handle Parsing Uploaded Chapter Reports
+            const processFiles = async (fileList) => {
+                const files = Array.from(fileList);
+                const updated = { ...chapterFiles };
+                const errors = [];
+                const currentEmail = videoCheckEmail.trim().toLowerCase();
 
-            // Load saved key on mount
-            useEffect(() => {
-                const raw = localStorage.getItem('google_api_key');
-                if (raw) {
+                for (const file of files) {
+                    if (!file.name.toLowerCase().endsWith('.txt') && !file.name.toLowerCase().endsWith('.md')) continue;
                     try {
-                        const parsed = JSON.parse(raw);
-                        if (Array.isArray(parsed)) setApiKeys(parsed);
-                        else setApiKeys([{ key: raw, label: 'Default' }]);
-                    } catch {
-                        setApiKeys([{ key: raw, label: 'Default' }]);
+                        const text = await file.text();
+                        const chMatch = text.match(/ISTUDY REPORT - CHAPTER\s*(\d+)/i);
+                        const idMatch = text.match(/STUDENT ID:\s*([^\r\n]+)/i);
+                        const codeMatch = text.match(/COMPLETION CODE:\s*([^\r\n]+)/i);
+
+                        if (!chMatch) {
+                            errors.push(`Could not identify chapter number in "${file.name}".`);
+                            continue;
+                        }
+
+                        const chNum = parseInt(chMatch[1]);
+                        if (isNaN(chNum) || chNum < 1 || chNum > 13) {
+                            errors.push(`Invalid chapter number (${chMatch[1]}) in "${file.name}".`);
+                            continue;
+                        }
+
+                        const fileStudentEmail = idMatch ? idMatch[1].trim().toLowerCase() : '';
+                        if (fileStudentEmail && fileStudentEmail !== currentEmail) {
+                            errors.push(`Chapter ${chNum} report was generated for "${fileStudentEmail}", which does not match your verified email (${currentEmail}).`);
+                            continue;
+                        }
+
+                        const code = codeMatch ? codeMatch[1].trim() : '';
+                        if (!code || !/^\d{17}$/.test(code)) {
+                            errors.push(`Chapter ${chNum} report does not contain a valid 17-digit completion code.`);
+                            continue;
+                        }
+
+                        updated[chNum] = {
+                            chapter: chNum,
+                            code: code,
+                            studentId: fileStudentEmail,
+                            fileName: file.name,
+                            isValid: true
+                        };
+                    } catch (e) {
+                        errors.push(`Error reading file "${file.name}": ${e.message}`);
                     }
                 }
-            }, []);
+
+                // Uniqueness verification across codes
+                const codeMap = {};
+                Object.values(updated).forEach(item => {
+                    if (item && item.code) {
+                        if (codeMap[item.code] && codeMap[item.code] !== item.chapter) {
+                            errors.push(`Duplicate completion code detected in Chapter ${item.chapter} and Chapter ${codeMap[item.code]}.`);
+                        }
+                        codeMap[item.code] = item.chapter;
+                    }
+                });
+
+                setChapterFiles(updated);
+                setFileErrors(errors);
+            };
+
+            const handleFileInputChange = (e) => {
+                if (e.target.files && e.target.files.length > 0) {
+                    processFiles(e.target.files);
+                }
+            };
+
+            const handleDrop = (e) => {
+                e.preventDefault();
+                setIsDragging(false);
+                if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                    processFiles(e.dataTransfer.files);
+                }
+            };
+
+            const validChapterCount = Object.keys(chapterFiles).filter(k => chapterFiles[k] && chapterFiles[k].isValid).length;
+            const all13Verified = validChapterCount === 13 && fileErrors.length === 0;
 
             const addVideoRow = () => {
-                setVideoRows([...videoRows, { chapter: '', url: '', code: '' }]);
+                if (videoRows.length < 13) {
+                    setVideoRows([...videoRows, { chapter: '', url: '' }]);
+                }
             };
 
             const removeVideoRow = (idx) => {
                 const updated = videoRows.filter((_, i) => i !== idx);
-                setVideoRows(updated.length > 0 ? updated : [{ chapter: '', url: '', code: '' }]);
+                setVideoRows(updated.length > 0 ? updated : [{ chapter: '', url: '' }]);
             };
 
             const updateVideoRow = (index, field, value) => {
-                const NewRows = [...videoRows];
-                NewRows[index][field] = value;
-                setVideoRows(NewRows);
+                const newRows = [...videoRows];
+                newRows[index][field] = value;
+                setVideoRows(newRows);
             };
 
-            const calculateVideoGrade = () => {
-                const filledCount = videoRows.filter(r => r.chapter && r.url.trim().length > 10 && isCodeValid(r)).length;
-                if (filledCount >= 10) return 'A+';
-                if (filledCount >= 8) return 'A';
-                if (filledCount >= 6) return 'A-';
-                return 'B+';
+            const isValidYouTubeUrl = (url) => {
+                if (!url || typeof url !== 'string') return false;
+                const trimmed = url.trim().toLowerCase();
+                return (trimmed.includes('youtube.com/watch') || trimmed.includes('youtu.be/') || trimmed.includes('youtube.com/shorts/')) && trimmed.length >= 15;
             };
 
-            const vGrades = { 6: 'A-', 8: 'A', 10: 'A+' };
-
-            const isDone = (num, type = 'Chapter') => {
-                const padded = num.toString().padStart(2, '0');
-                const val = (roadmapData[`${type} ${padded}`] ||
-                    roadmapData[`${type.toLowerCase()} ${padded}`] ||
-                    roadmapData[`${type} ${num}`]);
-                return !!val;
-            };
-
-            const isCodeValid = (row) => {
-                if (!row.chapter || !roadmapData) return false;
-                const padded = row.chapter.toString().padStart(2, '0');
-                const expected = (roadmapData[`Chapter ${padded}`] ||
-                    roadmapData[`chapter ${padded}`] ||
-                    roadmapData[`Chapter ${row.chapter}`]);
-                return expected && row.code.trim() === expected.toString().trim();
-            };
-
-            const getCodeOwner = (enteredCode) => {
-                if (!enteredCode || !roadmapData) return null;
-                const trimmed = enteredCode.trim();
-                for (let key in roadmapData) {
-                    if (key.toLowerCase().includes('chapter') && roadmapData[key] && roadmapData[key].toString().trim() === trimmed) {
-                        return key.replace(/chapter\s*/i, '');
-                    }
-                }
-                return null;
-            };
+            const filledValidRows = videoRows.filter(r => r.chapter && chapterFiles[r.chapter]?.code && isValidYouTubeUrl(r.url));
+            const validVideoCount = filledValidRows.length;
 
             const handleVideoSubmit = async () => {
-                console.log("Submit button clicked. Total rows:", videoRows.length);
                 if (isVideoSubmitting) return;
-                const filledRows = videoRows.filter(r => r.chapter && r.url.trim().length > 10);
-                console.log("Valid rows count:", filledRows.length);
-                const chapters = filledRows.map(r => r.chapter);
-                const urls = filledRows.map(r => r.url.trim().toLowerCase());
+
+                if (!all13Verified) {
+                    alert("⚠️ Please upload and verify all 13 chapter Q&A report files before submitting your exam portfolio.");
+                    return;
+                }
+
+                if (filledValidRows.length < 6) {
+                    alert("⚠️ Minimum 6 valid videos are required to submit an exam portfolio.");
+                    return;
+                }
+
+                const chapters = filledValidRows.map(r => r.chapter);
+                const urls = filledValidRows.map(r => r.url.trim().toLowerCase());
 
                 if (new Set(chapters).size !== chapters.length) {
                     alert("⚠️ Duplicate Chapters: You have selected the same chapter more than once.");
                     return;
                 }
+
                 if (new Set(urls).size !== urls.length) {
                     alert("⚠️ Duplicate URLs: You have entered the same video URL more than once.");
                     return;
                 }
-                if (filledRows.length < 6) {
-                    alert("You need at least 6 videos to submit for an A bracket grade.");
-                    return;
-                }
-
-                // Verify all filled rows have valid codes before submitting
-                const invalidCodes = filledRows.filter(r => !isCodeValid(r));
-                if (invalidCodes.length > 0) {
-                    alert("⚠️ One or more completion codes are incorrect. Please check the codes in red.");
-                    return;
-                }
 
                 setIsVideoSubmitting(true);
-                const grade = calculateVideoGrade();
-                setFinalProjectedGrade(grade);
+                setSubmittedVideoCount(filledValidRows.length);
 
                 try {
-                    const VIDEO_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz5z-WPUT6f5hNGzXVSwVnPtndmNCA_QLMegG4ZiPtmyCz2ctPF6XOkCrfOxXoe59JvTA/exec";
-                    const payload = {
-                        action: 'registerVideoPortfolio',
-                        email: videoCheckEmail,
-                        studentId: videoCheckEmail, // Support for alternate script keys
-                        finalGrade: grade, // Pass the calculated final grade to the script
-                        videos: filledRows.map(r => ({
-                            chapter: r.chapter.toString().padStart(2, '0'),
-                            url: r.url,
-                            code: r.code
-                        }))
-                    };
+                    const payloadVideos = filledValidRows.map(r => ({
+                        chapter: r.chapter.toString().padStart(2, '0'),
+                        code: chapterFiles[r.chapter].code,
+                        url: r.url.trim()
+                    }));
 
-                    console.log("Submitting payload to Google Script:", payload);
-
-                    const response = await fetch(VIDEO_SCRIPT_URL, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'text/plain' },
-                        body: JSON.stringify(payload)
-                    });
-
-                    const res = await response.json();
+                    const res = await window.Core.SubmitVideoPortfolio(videoCheckEmail, payloadVideos);
 
                     if (res && res.status === 'success') {
-                        // Wait a bit for the operation to complete on the sheet
-                        await new Promise(r => setTimeout(r, 1500));
                         setShowVideoSuccess(true);
                     } else {
-                        alert("❌ Submission Failed: " + (res.message || "Unknown error from Google Sheets."));
+                        alert("❌ Submission Failed: " + (res.message || "Unknown error sending portfolio."));
                     }
                 } catch (err) {
                     console.error("Submission error:", err);
@@ -309,149 +375,303 @@
                 }
             };
 
-
             return (
                 <div className="app-root">
                     <header>
-                        <div className="logo" onClick={() => window.location.href = 'index.html'} style={{ cursor: 'pointer' }}>IStudy <span style={{ fontSize: '0.5em', opacity: 0.6, verticalAlign: 'middle', fontWeight: 'normal' }}>Video Exam Portal</span></div>
-                        <div className="settings-icon" onClick={() => (window.location.href = 'index.html')}>
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" title="Back to Essays">
+                        <div className="logo" onClick={() => window.location.href = 'index.html'} style={{ cursor: 'pointer' }}>
+                            IStudy <span style={{ fontSize: '0.5em', opacity: 0.6, verticalAlign: 'middle', fontWeight: 'normal' }}>Exam Video Portal</span>
+                        </div>
+                        <div className="settings-icon" onClick={() => window.location.href = 'index.html'} title="Back to Essays">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                 <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
                                 <polyline points="9 22 9 12 15 12 15 22"></polyline>
                             </svg>
                         </div>
                     </header>
 
-                    <main className="container">
-                        <AnimatePresence mode="wait">
-                            {view === 'video_portal' && (
-                                <motion.div key="video_portal" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="video-portal-container">
-                                    <div className="video-portal-header">
-                                        <button className="back-link" onClick={() => window.location.href = 'index.html'}>← Back</button>
-                                        <h2>Exam Video Portal</h2>
-                                    </div>
+                    <main className="container" style={{ maxWidth: '1100px', padding: '20px' }}>
+                        <div className="video-portal-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                <button className="back-link" onClick={() => window.location.href = 'index.html'} style={{ background: 'transparent', border: 'none', color: '#0284c7', fontSize: '15px', fontWeight: '600', cursor: 'pointer' }}>
+                                    ← Back to Essays
+                                </button>
+                                <h2 style={{ margin: 0, fontSize: '24px', fontWeight: '800', fontFamily: 'Outfit, sans-serif', color: '#0f172a' }}>Exam Video Portal</h2>
+                            </div>
+                            <div style={{ fontSize: '13px', color: '#64748b', background: '#f1f5f9', padding: '6px 14px', borderRadius: '20px', fontWeight: '500' }}>
+                                Student: <strong style={{ color: '#0f172a' }}>{videoCheckEmail}</strong>
+                            </div>
+                        </div>
 
-                                    <div className="video-portal-layout">
-                                        <div className="video-form-section">
-                                            <div className="video-form-grid" style={{ gridTemplateColumns: '140px 120px 1fr 40px' }}>
-                                                <div className="grid-header">Chapter</div>
-                                                <div className="grid-header" style={{ display: 'flex', alignItems: 'center' }}>
-                                                    Code
-                                                    <span className="info-tooltip">
-                                                        ⓘ
-                                                        <span className="tooltiptext">
-                                                            This is the <strong>COMPLETION CODE</strong> that appears at the top of each of your <strong>Q&A reports</strong>; these are the reports you received via email after completing the given chapter and the reports you should have use to study for the exams.
-                                                        </span>
-                                                    </span>
-                                                </div>
-                                                <div className="grid-header">YouTube URL</div>
-                                                <div className="grid-header"></div>
-                                                {videoRows.map((row, idx) => (
-                                                    <React.Fragment key={idx}>
-                                                        <select
-                                                            className="video-select"
-                                                            value={row.chapter}
-                                                            onChange={(e) => updateVideoRow(idx, 'chapter', e.target.value)}
-                                                        >
-                                                            <option value="">Select Chapter</option>
-                                                            {[...Array(13)].map((_, i) => {
-                                                                const chNum = (i + 1).toString();
-                                                                const isAvailable = row.chapter === chNum || !videoRows.some(vr => vr.chapter === chNum);
-                                                                if (!isAvailable) return null;
-                                                                return <option key={chNum} value={chNum}>Chapter {chNum}</option>;
-                                                            })}
-                                                        </select>
-                                                        <div style={{ position: 'relative' }}>
-                                                            <input
-                                                                type="text"
-                                                                className="video-input"
-                                                                placeholder="Code..."
-                                                                value={row.code}
-                                                                style={{
-                                                                    fontFamily: 'monospace',
-                                                                    width: '100%',
-                                                                    color: row.code && isCodeValid(row) ? '#166534' : row.code ? '#b91c1c' : 'inherit',
-                                                                    borderColor: row.code && isCodeValid(row) ? '#166534' : row.code ? '#ef4444' : '#e2e8f0',
-                                                                    background: row.code && isCodeValid(row) ? '#f0fdf4' : row.code ? '#fef2f2' : 'transparent'
-                                                                }}
-                                                                onChange={(e) => updateVideoRow(idx, 'code', e.target.value)}
-                                                                disabled={!row.chapter}
-                                                            />
-                                                            {row.code && !isCodeValid(row) && (
-                                                                <div style={{
-                                                                    fontSize: '8px',
-                                                                    color: '#b91c1c',
-                                                                    position: 'absolute',
-                                                                    bottom: '-14px',
-                                                                    left: '2px',
-                                                                    fontWeight: 'bold',
-                                                                    whiteSpace: 'normal',
-                                                                    width: 'max-content',
-                                                                    maxWidth: '140px',
-                                                                    lineHeight: '1.2'
-                                                                }}>
-                                                                    {getCodeOwner(row.code)
-                                                                        ? `Matches Chapter ${getCodeOwner(row.code)}`
-                                                                        : "This code does not match our records. Check your Q&A report for this chapter."}
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                        <input
-                                                            type="text"
-                                                            className="video-input"
-                                                            placeholder={!row.chapter ? "Chapter first" : !isCodeValid(row) ? "Enter valid code first" : "YouTube URL..."}
-                                                            value={row.url}
-                                                            onChange={(e) => updateVideoRow(idx, 'url', e.target.value)}
-                                                            disabled={!isCodeValid(row)}
-                                                        />
-                                                        <button className="remove-row-btn" onClick={() => removeVideoRow(idx)}>✕</button>
-                                                    </React.Fragment>
-                                                ))}
-                                            </div>
-                                            <button className="add-row-btn" onClick={addVideoRow}>+ Add Another Video</button>
-                                            <div className="video-submit-wrapper">
-                                                <button
-                                                    className={`main-upload-btn ${isVideoSubmitting ? 'disabled' : ''}`}
-                                                    onClick={handleVideoSubmit}
-                                                    disabled={isVideoSubmitting}
-                                                    style={{ width: '100%', justifyContent: 'center' }}
-                                                >
-                                                    {isVideoSubmitting ? "Submitting..." : "Submit Exam Portfolio"}
-                                                </button>
-                                            </div>
-                                        </div>
+                        {/* STEP 1: LOAD & VERIFY 13 CHAPTER REPORTS */}
+                        <div style={{ background: '#ffffff', borderRadius: '20px', padding: '24px', border: '1px solid #e2e8f0', marginBottom: '24px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                                <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '700', color: '#0f172a' }}>
+                                    1. Verify Chapter Q&A Reports ({validChapterCount}/13 Verified)
+                                </h3>
+                                {all13Verified ? (
+                                    <span style={{ background: '#dcfce7', color: '#166534', padding: '4px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: '700' }}>
+                                        ✓ All 13 Reports Verified
+                                    </span>
+                                ) : (
+                                    <span style={{ background: '#fee2e2', color: '#991b1b', padding: '4px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: '700' }}>
+                                        {13 - validChapterCount} Remaining
+                                    </span>
+                                )}
+                            </div>
 
-                                        <div className="video-grade-section" style={{ minWidth: '400px' }}>
-                                            <div className="grade-card-large">
-                                                <div className="grade-header-top">
-                                                    {videoRows.filter(r => r.chapter && r.url.trim().length > 10 && isCodeValid(r)).length < 6
-                                                        ? "Your current grade is"
-                                                        : "Your projected grade in this class will be:"}
-                                                </div>
-                                                <div className="grade-letter-giant">{calculateVideoGrade()}</div>
-                                                <div className="grade-footer-bottom">
-                                                    {videoRows.filter(r => r.chapter && r.url.trim().length > 10 && isCodeValid(r)).length < 6
-                                                        ? "given 13 Q&A reports you submitted"
-                                                        : "{pending review of the videos}"}
-                                                </div>
-                                            </div>
+                            <p style={{ fontSize: '14px', color: '#64748b', marginTop: '0', marginBottom: '16px' }}>
+                                To unlock exam video submissions, please load your <strong>13 Chapter Report .txt files</strong> saved from your weekly Q&A sessions.
+                            </p>
+
+                            <input
+                                type="file"
+                                ref={fileInputRef}
+                                onChange={handleFileInputChange}
+                                multiple
+                                accept=".txt,.md"
+                                style={{ display: 'none' }}
+                            />
+
+                            <div
+                                className={`file-drop-zone ${isDragging ? 'dragover' : ''}`}
+                                onClick={() => fileInputRef.current && fileInputRef.current.click()}
+                                onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                                onDragLeave={() => setIsDragging(false)}
+                                onDrop={handleDrop}
+                            >
+                                <div style={{ fontSize: '28px', marginBottom: '6px' }}>📂</div>
+                                <div style={{ fontWeight: '700', fontSize: '15px', color: '#0369a1' }}>
+                                    Click to Browse or Drag & Drop all 13 Report Files here (.txt)
+                                </div>
+                                <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
+                                    You can select multiple files at once. The app will automatically verify student ID and completion codes locally.
+                                </div>
+                            </div>
+
+                            {/* 13 Pill Checklist */}
+                            <div className="chapters-badge-grid">
+                                {[...Array(13)].map((_, i) => {
+                                    const num = i + 1;
+                                    const isVerified = chapterFiles[num] && chapterFiles[num].isValid;
+                                    return (
+                                        <div key={num} className={`chapter-pill ${isVerified ? 'verified' : ''}`}>
+                                            {isVerified ? `✓ Ch ${num}` : `Ch ${num}`}
                                         </div>
-                                    </div>
-                                </motion.div>
+                                    );
+                                })}
+                            </div>
+
+                            {fileErrors.length > 0 && (
+                                <div style={{ marginTop: '16px', padding: '12px 16px', borderRadius: '12px', background: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b', fontSize: '13px' }}>
+                                    <strong>⚠️ File Validation Notes:</strong>
+                                    <ul style={{ margin: '6px 0 0 0', paddingLeft: '20px' }}>
+                                        {fileErrors.map((err, idx) => <li key={idx}>{err}</li>)}
+                                    </ul>
+                                </div>
                             )}
-                        </AnimatePresence>
+                        </div>
+
+                        {/* STEP 2: VIDEO SUBMISSION FORM & SYLLABUS TIER GUIDELINE */}
+                        <div className="video-portal-layout" style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '24px', opacity: all13Verified ? 1 : 0.45, pointerEvents: all13Verified ? 'auto' : 'none' }}>
+                            {/* Left Column: Video Rows */}
+                            <div className="video-form-section" style={{ background: '#ffffff', borderRadius: '20px', padding: '24px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
+                                <h3 style={{ margin: '0 0 6px 0', fontSize: '18px', fontWeight: '700', color: '#0f172a' }}>
+                                    2. Enter YouTube Video Links (Min. 6)
+                                </h3>
+                                <p style={{ fontSize: '13px', color: '#64748b', marginTop: 0, marginBottom: '20px' }}>
+                                    Select the chapter for each video you recorded. Verification codes are automatically populated from your verified reports.
+                                </p>
+
+                                <div className="video-form-grid" style={{ display: 'grid', gridTemplateColumns: '150px 140px 1fr 36px', gap: '10px', alignItems: 'center', marginBottom: '16px' }}>
+                                    <div className="grid-header" style={{ fontSize: '12px', fontWeight: '700', color: '#475569' }}>Chapter</div>
+                                    <div className="grid-header" style={{ fontSize: '12px', fontWeight: '700', color: '#475569' }}>Code (Auto)</div>
+                                    <div className="grid-header" style={{ fontSize: '12px', fontWeight: '700', color: '#475569' }}>YouTube URL</div>
+                                    <div></div>
+
+                                    {videoRows.map((row, idx) => {
+                                        const codeForCh = row.chapter && chapterFiles[row.chapter]?.code;
+                                        const isValidUrl = isValidYouTubeUrl(row.url);
+                                        return (
+                                            <React.Fragment key={idx}>
+                                                <select
+                                                    className="video-select"
+                                                    value={row.chapter}
+                                                    onChange={(e) => updateVideoRow(idx, 'chapter', e.target.value)}
+                                                    style={{ padding: '10px', borderRadius: '10px', border: '1px solid #cbd5e1', fontSize: '14px', background: '#fff' }}
+                                                >
+                                                    <option value="">Select Chapter</option>
+                                                    {[...Array(13)].map((_, i) => {
+                                                        const chNum = (i + 1).toString();
+                                                        const isSelectedElsewhere = videoRows.some((vr, vi) => vi !== idx && vr.chapter === chNum);
+                                                        if (isSelectedElsewhere) return null;
+                                                        return <option key={chNum} value={chNum}>Chapter {chNum}</option>;
+                                                    })}
+                                                </select>
+
+                                                <input
+                                                    type="text"
+                                                    readOnly
+                                                    value={codeForCh ? `${codeForCh.slice(0, 3)}...${codeForCh.slice(-4)}` : '—'}
+                                                    title={codeForCh || 'Select chapter first'}
+                                                    style={{
+                                                        padding: '10px',
+                                                        borderRadius: '10px',
+                                                        border: '1px solid #e2e8f0',
+                                                        background: codeForCh ? '#f0fdf4' : '#f8fafc',
+                                                        color: codeForCh ? '#166534' : '#94a3b8',
+                                                        fontFamily: 'monospace',
+                                                        fontSize: '12px',
+                                                        fontWeight: '700',
+                                                        textAlign: 'center'
+                                                    }}
+                                                />
+
+                                                <input
+                                                    type="text"
+                                                    className="video-input"
+                                                    placeholder={!row.chapter ? "Select chapter first" : "https://youtu.be/..."}
+                                                    value={row.url}
+                                                    onChange={(e) => updateVideoRow(idx, 'url', e.target.value)}
+                                                    disabled={!row.chapter}
+                                                    style={{
+                                                        padding: '10px',
+                                                        borderRadius: '10px',
+                                                        border: '1px solid',
+                                                        borderColor: row.url ? (isValidUrl ? '#16a34a' : '#ef4444') : '#cbd5e1',
+                                                        background: row.url ? (isValidUrl ? '#f0fdf4' : '#fef2f2') : '#fff',
+                                                        fontSize: '13px'
+                                                    }}
+                                                />
+
+                                                <button
+                                                    className="remove-row-btn"
+                                                    onClick={() => removeVideoRow(idx)}
+                                                    style={{ background: '#f1f5f9', border: 'none', borderRadius: '8px', color: '#64748b', height: '36px', width: '36px', cursor: 'pointer', fontWeight: 'bold' }}
+                                                    title="Remove row"
+                                                >
+                                                    ✕
+                                                </button>
+                                            </React.Fragment>
+                                        );
+                                    })}
+                                </div>
+
+                                <div style={{ display: 'flex', gap: '12px', marginTop: '10px' }}>
+                                    <button
+                                        onClick={addVideoRow}
+                                        disabled={videoRows.length >= 13}
+                                        style={{
+                                            padding: '10px 18px',
+                                            borderRadius: '10px',
+                                            border: '1px dashed #94a3b8',
+                                            background: '#f8fafc',
+                                            color: '#334155',
+                                            fontSize: '13px',
+                                            fontWeight: '600',
+                                            cursor: videoRows.length >= 13 ? 'not-allowed' : 'pointer'
+                                        }}
+                                    >
+                                        + Add Another Video Row
+                                    </button>
+                                </div>
+
+                                <div style={{ marginTop: '24px' }}>
+                                    <button
+                                        className="btn-primary"
+                                        onClick={handleVideoSubmit}
+                                        disabled={isVideoSubmitting || validVideoCount < 6 || !all13Verified}
+                                        style={{
+                                            width: '100%',
+                                            padding: '14px',
+                                            fontSize: '16px',
+                                            fontWeight: '700',
+                                            borderRadius: '12px',
+                                            background: (validVideoCount >= 6 && all13Verified && !isVideoSubmitting) ? '#16a34a' : '#cbd5e1',
+                                            borderColor: (validVideoCount >= 6 && all13Verified && !isVideoSubmitting) ? '#16a34a' : '#cbd5e1',
+                                            cursor: (validVideoCount >= 6 && all13Verified && !isVideoSubmitting) ? 'pointer' : 'not-allowed'
+                                        }}
+                                    >
+                                        {isVideoSubmitting ? "Submitting Portfolio..." : `Submit Exam Portfolio (${validVideoCount} Videos)`}
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Right Column: Video Counter & Syllabus Submission Guidelines */}
+                            <div className="video-grade-section" style={{ background: '#ffffff', borderRadius: '20px', padding: '24px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', height: 'fit-content' }}>
+                                <div style={{ textAlign: 'center', paddingBottom: '20px', borderBottom: '1px solid #e2e8f0', marginBottom: '20px' }}>
+                                    <div style={{ fontSize: '13px', fontWeight: '700', textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.5px' }}>
+                                        Videos Ready to Submit
+                                    </div>
+                                    <div style={{ fontSize: '64px', fontWeight: '800', fontFamily: 'Outfit, sans-serif', color: validVideoCount >= 6 ? '#16a34a' : '#0f172a', lineHeight: '1.1', margin: '10px 0 6px 0' }}>
+                                        {validVideoCount}
+                                    </div>
+                                    <div style={{ fontSize: '13px', color: '#64748b' }}>
+                                        {validVideoCount < 6 ? `Need ${6 - validVideoCount} more to meet minimum` : "Ready for evaluation"}
+                                    </div>
+                                </div>
+
+                                <div style={{ fontSize: '13px', fontWeight: '700', color: '#334155', marginBottom: '12px' }}>
+                                    Syllabus Submission Targets
+                                </div>
+
+                                <div className={`rubric-tier-card ${validVideoCount >= 6 && validVideoCount < 8 ? 'active' : ''}`}>
+                                    <div>
+                                        <div className="rubric-tier-target">6 Videos</div>
+                                        <div style={{ fontSize: '11px', color: '#64748b' }}>Evaluated for A−</div>
+                                    </div>
+                                    <span className="rubric-tier-badge">{validVideoCount >= 6 ? '✓ Met' : 'Min Tier'}</span>
+                                </div>
+
+                                <div className={`rubric-tier-card ${validVideoCount >= 8 && validVideoCount < 10 ? 'active' : ''}`}>
+                                    <div>
+                                        <div className="rubric-tier-target">8 Videos</div>
+                                        <div style={{ fontSize: '11px', color: '#64748b' }}>Evaluated for A</div>
+                                    </div>
+                                    <span className="rubric-tier-badge">{validVideoCount >= 8 ? '✓ Met' : 'Tier 2'}</span>
+                                </div>
+
+                                <div className={`rubric-tier-card ${validVideoCount >= 10 ? 'active' : ''}`}>
+                                    <div>
+                                        <div className="rubric-tier-target">10+ Videos</div>
+                                        <div style={{ fontSize: '11px', color: '#64748b' }}>Evaluated for A+</div>
+                                    </div>
+                                    <span className="rubric-tier-badge">{validVideoCount >= 10 ? '✓ Met' : 'Max Tier'}</span>
+                                </div>
+
+                                <div style={{ marginTop: '16px', padding: '10px', background: '#f8fafc', borderRadius: '10px', fontSize: '11px', color: '#64748b', lineHeight: '1.4' }}>
+                                    ℹ️ Official grades are finalized by Dr. Mora upon video review in Lamakū.
+                                </div>
+                            </div>
+                        </div>
                     </main>
 
+                    {/* SUCCESS MODAL */}
                     {showVideoSuccess && (
-                        <div className="modal-overlay">
-                            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="modal-content success-modal" style={{ maxWidth: '900px' }}>
-                                <h3>Submission Successful!</h3>
-                                <p>Your final grade in this class is projected to be <strong>{finalProjectedGrade}</strong>.</p>
-                                <div style={{ marginTop: '30px', textAlign: 'center' }}>
-                                    <button className="btn-primary" onClick={() => {
-                                        window.location.href = 'index.html';
-                                    }}>Confirm & Exit</button>
+                        <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15, 23, 42, 0.75)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10000 }}>
+                            <motion.div
+                                initial={{ scale: 0.9, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 1 }}
+                                className="modal-content"
+                                style={{ background: '#ffffff', borderRadius: '24px', padding: '36px', maxWidth: '520px', width: '90%', textAlign: 'center', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)' }}
+                            >
+                                <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: '#dcfce7', color: '#16a34a', fontSize: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px auto', fontWeight: 'bold' }}>
+                                    ✓
                                 </div>
+                                <h3 style={{ fontSize: '24px', fontWeight: '800', fontFamily: 'Outfit, sans-serif', color: '#0f172a', margin: '0 0 10px 0' }}>
+                                    Submission Successful!
+                                </h3>
+                                <p style={{ fontSize: '15px', color: '#475569', lineHeight: '1.6', margin: '0 0 24px 0' }}>
+                                    You have successfully submitted <strong>{submittedVideoCount} chapter videos</strong> for evaluation.
+                                    <br /><br />
+                                    A confirmation receipt with your submitted links has been dispatched to Dr. Mora and to your email address (<strong>{videoCheckEmail}</strong>).
+                                </p>
+                                <button
+                                    className="btn-primary"
+                                    onClick={() => window.location.href = 'index.html'}
+                                    style={{ padding: '12px 32px', fontSize: '15px', fontWeight: '700', borderRadius: '12px', background: '#0284c7', borderColor: '#0284c7', cursor: 'pointer' }}
+                                >
+                                    Close App
+                                </button>
                             </motion.div>
                         </div>
                     )}
@@ -463,8 +683,7 @@
             );
         }
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
     </script>
 </body>
 

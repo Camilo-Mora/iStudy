@@ -1409,27 +1409,8 @@ I could not make sense of what you wrote.
                     const res = await window.Core.VerifyOTP(videoCheckEmail, videoOtpInput);
                     if (res.status === 'success') {
                         setVerificationCode(videoOtpInput);
-                        const comp = res.completion;
-                        let completedCount = 0;
-                        const compKeys = Object.keys(comp);
-                        for (let i = 1; i <= 13; i++) {
-                            const num = i;
-                            const padded = i.toString().padStart(2, '0');
-                            const isDone = compKeys.some(k => {
-                                const lowerK = k.toLowerCase();
-                                return (lowerK === `chapter ${num}` || lowerK === `chapter${num}` ||
-                                    lowerK === `chapter ${padded}` || lowerK === `chapter${padded}`) &&
-                                    comp[k];
-                            });
-                            if (isDone) completedCount++;
-                        }
-
-                        if (completedCount >= 13) {
-                            setShowVideoEmailModal(false);
-                            window.location.href = `video_exams.html?email=${encodeURIComponent(videoCheckEmail)}`;
-                        } else {
-                            setVideoError(`❌ Verification Failed: You have only completed ${completedCount} out of 13 chapters. Please finish the weekly Q&A reports first.`);
-                        }
+                        setShowVideoEmailModal(false);
+                        window.location.href = `video_exams.html?email=${encodeURIComponent(videoCheckEmail)}`;
                     } else {
                         setVideoError("❌ Invalid code. Please check your email and try again.");
                     }

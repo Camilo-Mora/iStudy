@@ -20,6 +20,8 @@ function doPost(e) {
       return registerVideoPortfolio(data.email, data.finalGrade, data.videos);
     } else if (action === "submitReportEmail") {
       return submitReportEmail(data.email, data.chapter, data.uniqueCode, data.reportContent);
+    } else if (action === "submitVideoPortfolioEmail") {
+      return submitVideoPortfolioEmail(data.email, data.videos);
     }
 
     return response({ status: "error", message: "Invalid action: " + action });
@@ -366,6 +368,74 @@ function processInboxSubmissions() {
       msg.markRead();
     });
   });
+}
+
+function submitVideoPortfolioEmail(email, videos) {
+  try {
+    const instructorEmail = "cmora@hawaii.edu";
+    const videoList = Array.isArray(videos) ? videos : [];
+    const totalVideos = videoList.length;
+
+    // 1. Format Structured Email to Instructor
+    const instructorSubject = "[iStudy Video Portfolio] - " + email;
+    let instructorBody =
+      "iStudy Exam Video Portfolio Submission\n" +
+      "--------------------------------------\n" +
+      "STUDENT: " + email + "\n" +
+      "TIMESTAMP: " + new Date().toISOString() + "\n" +
+      "TOTAL_VIDEOS: " + totalVideos + "\n\n" +
+      "--- SUBMITTED VIDEOS ---\n";
+
+    videoList.forEach(v => {
+      const chNum = (v.chapter || "").toString().padStart(2, '0');
+      instructorBody += "CH:" + chNum + " | CODE:" + (v.code || "NONE") + " | URL:" + (v.url || "") + "\n";
+    });
+
+    MailApp.sendEmail({
+      to: instructorEmail,
+      subject: instructorSubject,
+      body: instructorBody
+    });
+
+    // 2. Format Receipt to Student (no letter grade mentioned)
+    try {
+      const studentSubject = "GEO302/SUST314 Final Video Exams Received";
+      const chapterNumbers = videoList.map(v => "Chapter " + parseInt(v.chapter || 0)).join(", ");
+
+      let studentHtml =
+        "<div style=\"font-family: Arial, sans-serif; font-size: 15px; color: #333; line-height: 1.6;\">" +
+        "<p>Aloha,</p>" +
+        "<p>I have received your <strong>" + totalVideos + "</strong> exam videos for: <strong>" + chapterNumbers + "</strong>.</p>" +
+        "<p>I will review your responses and only contact you if any of your videos require correction.</p>" +
+        "<p>Below is a copy of your submitted exam video links for your records:</p>" +
+        "<ul>";
+
+      videoList.forEach(v => {
+        const ch = parseInt(v.chapter || 0);
+        studentHtml += "<li><strong>Chapter " + ch + ":</strong> <a href=\"" + v.url + "\" target=\"_blank\">" + v.url + "</a></li>";
+      });
+
+      studentHtml +=
+        "</ul>" +
+        "<p style=\"margin-top: 30px; font-size: 13px; color: #777;\">iStudy Diagnostic System</p>" +
+        "</div>";
+
+      MailApp.sendEmail({
+        to: email,
+        subject: studentSubject,
+        htmlBody: studentHtml
+      });
+    } catch (studentErr) {
+      // Non-blocking if student email fails
+    }
+
+    return response({
+      status: "success",
+      message: "Portfolio submitted successfully to instructor and student."
+    });
+  } catch (err) {
+    return response({ status: "error", message: "Failed to dispatch portfolio: " + err.toString() });
+  }
 }
 
 function response(obj) {
