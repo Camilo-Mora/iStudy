@@ -3,6 +3,14 @@
  */
 
 
+/**
+ * Handles incoming GET requests (health check / browser pings).
+ * Prevents Google Apps Script from crashing with an HTML error page when probed via GET.
+ */
+function doGet(e) {
+  return response({ status: "active", message: "iStudy Backend is running" });
+}
+
 function doPost(e) {
   try {
     const data = JSON.parse(e.postData.contents);
@@ -18,13 +26,90 @@ function doPost(e) {
       return registerCompletion(data.email, data.chapter, data.uniqueCode, data.reportContent, data.finalGrade);
     } else if (action === "registerVideoPortfolio") {
       return registerVideoPortfolio(data.email, data.finalGrade, data.videos);
-    } else if (action === "submitReportEmail") {
-      return submitReportEmail(data.email, data.chapter, data.uniqueCode, data.reportContent);
+    } else if (action === "proxyGemini") {
+      return proxyGemini(data.model, data.promptText);
     }
 
     return response({ status: "error", message: "Invalid action: " + action });
   } catch (err) {
     return response({ status: "error", message: "System Error: " + err.toString() });
+  }
+}
+
+/**
+ * Retrieves the Gemini API key.
+ * Checks CacheService first. If not found or expired, loads from cell A1 of the API_Key sheet
+ * and stores it in cache for 6 hours (21600s).
+ */
+function getCachedApiKey() {
+  const cache = CacheService.getScriptCache();
+  let apiKey = cache.get("GEMINI_API_KEY");
+  if (apiKey && apiKey.length >= 10) {
+    return apiKey;
+  }
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const allSheets = ss.getSheets();
+  const apiKeySheet = allSheets.find(s => {
+    const name = s.getName().toLowerCase().replace(/[^a-z0-9]/g, '');
+    return name === "apikey" || name.includes("apikey");
+  }) || ss.getSheetByName("API_Key");
+
+  if (!apiKeySheet) {
+    throw new Error("API_Key sheet not found in spreadsheet. Found sheets: " + allSheets.map(s => s.getName()).join(", "));
+  }
+
+  apiKey = apiKeySheet.getRange("A1").getValue().toString().trim();
+  if (!apiKey || apiKey.length < 10) {
+    throw new Error("API key in cell A1 of sheet '" + apiKeySheet.getName() + "' is empty or invalid.");
+  }
+
+  // Cache for 6 hours (maximum allowable duration in CacheService)
+  cache.put("GEMINI_API_KEY", apiKey, 21600);
+  return apiKey;
+}
+
+/**
+ * Proxies an AI generateContent request server-side using the instructor's
+ * API key stored in cell A1 of the "API_Key" sheet (cached in-memory for speed).
+ */
+function proxyGemini(model, promptText) {
+  try {
+    const apiKey = getCachedApiKey();
+
+    const targetModel = model || "gemma-4-26b-a4b-it";
+    const cleanModel = targetModel.includes('/') ? targetModel : ("models/" + targetModel);
+    const url = "https://generativelanguage.googleapis.com/v1beta/" + cleanModel + ":generateContent?key=" + apiKey;
+
+    const payload = {
+      contents: [{ parts: [{ text: promptText }] }],
+      safetySettings: [
+        { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
+        { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+        { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+        { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
+      ]
+    };
+
+    const options = {
+      method: "post",
+      contentType: "application/json",
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true
+    };
+
+    const res = UrlFetchApp.fetch(url, options);
+    const json = JSON.parse(res.getContentText());
+
+    // If the API key is reported invalid or unauthorized by Google, clear cache so it re-reads from sheet next time
+    if (json.error && (json.error.code === 400 || json.error.code === 403) && json.error.message && json.error.message.toLowerCase().includes("api_key")) {
+      CacheService.getScriptCache().remove("GEMINI_API_KEY");
+    }
+
+    return ContentService.createTextOutput(JSON.stringify(json))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return response({ error: { message: "proxyGemini error: " + err.toString() } });
   }
 }
 
@@ -157,20 +242,20 @@ function registerCompletion(email, chapter, uniqueCode, reportContent, finalGrad
   let emailStatus = "pending";
   try {
     const subject = "GEO302/SUST314 | Chapter " + chapter + " Report Attached";
-
-    const htmlBody =
+    
+    const htmlBody = 
       "<div style=\"font-family: Arial, sans-serif; font-size: 15px; color: #333; line-height: 1.6;\">" +
-      "<p>Attached is your Chapter " + chapter + " report.</p>" +
+        "<p>Attached is your Chapter " + chapter + " report.</p>" +
+        
+        "<p>This document attached is your <strong>Primary Study Source</strong> for the final exam, if you choose to take it.</p>" +
+        
+        "<p><strong>Note on Integrity:</strong> If you have submitted your Q&A session <strong>honestly</strong>, this report contains your best, most polished responses. If you rushed the process, your study resource for the final will be compromised.</p>" +
 
-      "<p>This document attached is your <strong>Primary Study Source</strong> for the final exam, if you choose to take it.</p>" +
+        "<p>Furthermore, If you choose to take the final video exams, you will be required to upload these files, so please ensure you keep a copy of this file.</p>" +
 
-      "<p><strong>Note on Integrity:</strong> If you have submitted your Q&A session <strong>honestly</strong>, this report contains your best, most polished responses. If you rushed the process, your study resource for the final will be compromised.</p>" +
-
-      "<p>Furthermore, If you choose to take the final video exams, you will be required to upload these files, so please ensure you keep a copy of this file.</p>" +
-
-      "<p style=\"margin-top: 30px; font-size: 13px; color: #777;\">" +
-      "iStudy Diagnostic System" +
-      "</p>" +
+        "<p style=\"margin-top: 30px; font-size: 13px; color: #777;\">" +
+          "iStudy Diagnostic System" +
+        "</p>" +
       "</div>";
 
     const blob = Utilities.newBlob(reportContent, "text/plain", "Report_Ch_" + padded + ".txt");
@@ -258,114 +343,6 @@ function registerVideoPortfolio(email, finalGrade, videos) {
   } catch (e) { }
 
   return response({ status: "success", grade: finalGrade });
-}
-
-function submitReportEmail(email, chapter, uniqueCode, reportContent) {
-  try {
-    const chNum = parseInt(chapter.toString().replace(/[^0-9]/g, ''));
-    const padded = (chNum < 10 ? "0" : "") + chNum;
-    const instructorEmail = "cmora@hawaii.edu";
-    const blob = Utilities.newBlob(reportContent, "text/plain", "Report_Ch_" + padded + "_" + email.replace(/[^a-zA-Z0-9]/g, '_') + ".txt");
-
-    // 1. Send Completion Notification + Attachment to Instructor
-    const instructorSubject = "[iStudy Completion] Chapter " + chapter + " - " + email;
-    const instructorBody =
-      "iStudy Chapter Completion Report\n" +
-      "---------------------------------\n" +
-      "Student: " + email + "\n" +
-      "Chapter: " + chapter + "\n" +
-      "Completion Code: " + uniqueCode + "\n" +
-      "Timestamp: " + new Date().toISOString() + "\n\n" +
-      "Attached is the student's completed response report.";
-
-    MailApp.sendEmail({
-      to: instructorEmail,
-      subject: instructorSubject,
-      body: instructorBody,
-      attachments: [blob]
-    });
-
-    // 2. Also send student confirmation copy with study material
-    try {
-      const studentSubject = "GEO302/SUST314 | Chapter " + chapter + " Report Attached";
-      const studentHtml =
-        "<div style=\"font-family: Arial, sans-serif; font-size: 15px; color: #333; line-height: 1.6;\">" +
-        "<p>Attached is your Chapter " + chapter + " report.</p>" +
-        "<p>This document attached is your <strong>Primary Study Source</strong> for the final exam, if you choose to take it.</p>" +
-        "<p><strong>Note on Integrity:</strong> If you have submitted your Q&A session <strong>honestly</strong>, this report contains your best, most polished responses. If you rushed the process, your study resource for the final will be compromised.</p>" +
-        "<p>Furthermore, if you choose to take the final video exams, you will be required to upload these files, so please ensure you keep a copy of this file.</p>" +
-        "<p><strong>Your Verification Code:</strong> " + uniqueCode + "</p>" +
-        "<p style=\"margin-top: 30px; font-size: 13px; color: #777;\">iStudy Diagnostic System</p>" +
-        "</div>";
-
-      MailApp.sendEmail({
-        to: email,
-        subject: studentSubject,
-        htmlBody: studentHtml,
-        attachments: [blob]
-      });
-    } catch (studentMailErr) {
-      // Non-blocking if student email fails
-    }
-
-    return response({
-      status: "success",
-      message: "Report sent successfully to instructor and student.",
-      uniqueCode: uniqueCode
-    });
-  } catch (err) {
-    return response({ status: "error", message: "Failed to dispatch email: " + err.toString() });
-  }
-}
-
-/**
- * OPTIONAL INTERNAL GMAIL AUTO-LOGGER SCRIPT
- * Run this function on a time-driven trigger (e.g. every 10 or 30 minutes)
- * inside Dr. Mora's private Google Apps Script attached to the master sheet.
- * It reads unread completion emails sent to camilo@hawaii.edu and marks them in the spreadsheet.
- */
-function processInboxSubmissions() {
-  const query = 'subject:"[iStudy Completion]" is:unread';
-  const threads = GmailApp.search(query, 0, 50);
-  if (threads.length === 0) return;
-
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName("Students") || ss.getSheets()[0];
-  const data = sheet.getDataRange().getValues();
-  const headers = data[0].map(h => h.toString().trim());
-  const emailIdx = headers.findIndex(h => h.toLowerCase().trim() === "email");
-  if (emailIdx === -1) return;
-
-  threads.forEach(thread => {
-    const messages = thread.getMessages();
-    messages.forEach(msg => {
-      if (!msg.isUnread()) return;
-
-      const body = msg.getPlainBody();
-      const studentMatch = body.match(/Student:\s*([^\r\n]+)/i);
-      const chapterMatch = body.match(/Chapter:\s*([^\r\n]+)/i);
-      const codeMatch = body.match(/Completion Code:\s*([^\r\n]+)/i);
-
-      if (studentMatch && chapterMatch) {
-        const studentEmail = studentMatch[1].trim();
-        const chNum = parseInt(chapterMatch[1].replace(/[^0-9]/g, ''));
-        const padded = (chNum < 10 ? "0" : "") + chNum;
-        const uniqueCode = codeMatch ? codeMatch[1].trim() : "✓";
-
-        const chapterColIdx = headers.findIndex(h => {
-          const clean = h.toLowerCase().replace(/[^a-z0-9]/g, '');
-          return clean === "chapter" + chNum || clean === "chapter" + padded;
-        });
-
-        const rowIdx = data.findIndex(row => row[emailIdx] && row[emailIdx].toString().toLowerCase().trim() === studentEmail.toLowerCase());
-
-        if (rowIdx !== -1 && chapterColIdx !== -1) {
-          sheet.getRange(rowIdx + 1, chapterColIdx + 1).setValue("✓").setNote(uniqueCode);
-        }
-      }
-      msg.markRead();
-    });
-  });
 }
 
 function response(obj) {

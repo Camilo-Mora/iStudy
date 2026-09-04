@@ -28,6 +28,8 @@ function doPost(e) {
       return registerVideoPortfolio(data.email, data.finalGrade, data.videos);
     } else if (action === "proxyGemini") {
       return proxyGemini(data.model, data.promptText);
+    } else if (action === "submitReportEmail") {
+      return submitReportEmail(data.email, data.chapter, data.uniqueCode, data.reportContent);
     }
 
     return response({ status: "error", message: "Invalid action: " + action });
@@ -343,6 +345,110 @@ function registerVideoPortfolio(email, finalGrade, videos) {
   } catch (e) { }
 
   return response({ status: "success", grade: finalGrade });
+}
+
+function submitReportEmail(email, chapter, uniqueCode, reportContent) {
+  try {
+    const chNum = parseInt(chapter.toString().replace(/[^0-9]/g, ''));
+    const padded = (chNum < 10 ? "0" : "") + chNum;
+    const instructorEmail = "cmora@hawaii.edu";
+    const blob = Utilities.newBlob(reportContent, "text/plain", "Report_Ch_" + padded + "_" + email.replace(/[^a-zA-Z0-9]/g, '_') + ".txt");
+
+    // 1. Send Completion Notification + Attachment to Instructor
+    const instructorSubject = "[iStudy Completion] Chapter " + chapter + " - " + email;
+    const instructorBody =
+      "iStudy Chapter Completion Report\n" +
+      "---------------------------------\n" +
+      "Student: " + email + "\n" +
+      "Chapter: " + chapter + "\n" +
+      "Completion Code: " + uniqueCode + "\n" +
+      "Timestamp: " + new Date().toISOString() + "\n\n" +
+      "Attached is the student's completed response report.";
+
+    MailApp.sendEmail({
+      to: instructorEmail,
+      subject: instructorSubject,
+      body: instructorBody,
+      attachments: [blob]
+    });
+
+    // 2. Also send student confirmation copy with study material
+    try {
+      const studentSubject = "GEO302/SUST314 | Chapter " + chapter + " Report Attached";
+      const studentHtml =
+        "<div style=\"font-family: Arial, sans-serif; font-size: 15px; color: #333; line-height: 1.6;\">" +
+        "<p>Attached is your Chapter " + chapter + " report.</p>" +
+        "<p>This document attached is your <strong>Primary Study Source</strong> for the final exam, if you choose to take it.</p>" +
+        "<p><strong>Note on Integrity:</strong> If you have submitted your Q&A session <strong>honestly</strong>, this report contains your best, most polished responses. If you rushed the process, your study resource for the final will be compromised.</p>" +
+        "<p>Furthermore, if you choose to take the final video exams, you will be required to upload these files, so please ensure you keep a copy of this file.</p>" +
+        "<p><strong>Your Verification Code:</strong> " + uniqueCode + "</p>" +
+        "<p style=\"margin-top: 30px; font-size: 13px; color: #777;\">iStudy Diagnostic System</p>" +
+        "</div>";
+
+      MailApp.sendEmail({
+        to: email,
+        subject: studentSubject,
+        htmlBody: studentHtml,
+        attachments: [blob]
+      });
+    } catch (studentMailErr) {
+      // Non-blocking if student email fails
+    }
+
+    return response({
+      status: "success",
+      message: "Report sent successfully to instructor and student.",
+      uniqueCode: uniqueCode
+    });
+  } catch (err) {
+    return response({ status: "error", message: "Failed to dispatch email: " + err.toString() });
+  }
+}
+
+/**
+ * OPTIONAL INTERNAL GMAIL AUTO-LOGGER
+ * Run on a time-driven trigger (e.g. every 15-30 min) inside Dr. Mora's
+ * private Apps Script bound to the master Google Sheet.
+ * Reads unread [iStudy Completion] emails and marks the student row in the sheet.
+ */
+function processInboxSubmissions() {
+  const query = 'subject:"[iStudy Completion]" is:unread';
+  const threads = GmailApp.search(query, 0, 50);
+  if (threads.length === 0) return;
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName("Students") || ss.getSheets()[0];
+  const data = sheet.getDataRange().getValues();
+  const headers = data[0].map(h => h.toString().trim());
+  const emailIdx = headers.findIndex(h => h.toLowerCase().trim() === "email");
+  if (emailIdx === -1) return;
+
+  threads.forEach(thread => {
+    thread.getMessages().forEach(msg => {
+      if (!msg.isUnread()) return;
+      const body = msg.getPlainBody();
+      const studentMatch = body.match(/Student:\s*([^\r\n]+)/i);
+      const chapterMatch = body.match(/Chapter:\s*([^\r\n]+)/i);
+      const codeMatch = body.match(/Completion Code:\s*([^\r\n]+)/i);
+
+      if (studentMatch && chapterMatch) {
+        const studentEmail = studentMatch[1].trim();
+        const chNum = parseInt(chapterMatch[1].replace(/[^0-9]/g, ''));
+        const padded = (chNum < 10 ? "0" : "") + chNum;
+        const uniqueCode = codeMatch ? codeMatch[1].trim() : "✓";
+
+        const chapterColIdx = headers.findIndex(h => {
+          const clean = h.toLowerCase().replace(/[^a-z0-9]/g, '');
+          return clean === "chapter" + chNum || clean === "chapter" + padded;
+        });
+        const rowIdx = data.findIndex(row => row[emailIdx] && row[emailIdx].toString().toLowerCase().trim() === studentEmail.toLowerCase());
+        if (rowIdx !== -1 && chapterColIdx !== -1) {
+          sheet.getRange(rowIdx + 1, chapterColIdx + 1).setValue("✓").setNote(uniqueCode);
+        }
+      }
+      msg.markRead();
+    });
+  });
 }
 
 function response(obj) {

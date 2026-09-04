@@ -385,6 +385,62 @@
                 throw new Error(finalMsg);
             },
 
+            // DISCOVERY UTILITIES
+            Discovery: {
+                getQualityTiers: () => [
+                    'gemini-3.1-flash-lite', 'gemini-3.5-flash-lite', 'gemma-4-26b-a4b-it', 'gemma-4-31b-it'
+                ],
+                probeModel: async (modelId) => {
+                    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz5z-WPUT6f5hNGzXVSwVnPtndmNCA_QLMegG4ZiPtmyCz2ctPF6XOkCrfOxXoe59JvTA/exec';
+                    try {
+                        const res = await fetch(APPS_SCRIPT_URL, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'text/plain' },
+                            body: JSON.stringify({ action: 'proxyGemini', model: modelId, promptText: 'ping' })
+                        });
+                        const rawText = await res.text();
+                        let data;
+                        try { data = JSON.parse(rawText); } catch(e) { return { active: false }; }
+                        if (data.error) {
+                            const msg = data.error.message?.toLowerCase() || '';
+                            if (msg.includes('permission') || msg.includes('quota') || msg.includes('exhausted') || msg.includes('not found')) return { active: false };
+                        }
+                        if (data.candidates || data.promptFeedback) return { active: true };
+                        return { active: false };
+                    } catch (e) { return { active: false }; }
+                },
+                getAiRanking: async (judgeModelId, candidateList) => {
+                    const prompt = `
+                        I have access to these Google AI models: [${candidateList.join(', ')}].
+                        Rank them from smartest (most complex reasoning/grading) to fastest (quick responses).
+                        Also provide a VERY BRIEF 1-sentence reason why the top model is #1.
+                        Output FORMAT: [ModelID1, ModelID2, ...] | Reason: YourReason
+                    `;
+                    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz5z-WPUT6f5hNGzXVSwVnPtndmNCA_QLMegG4ZiPtmyCz2ctPF6XOkCrfOxXoe59JvTA/exec';
+                    try {
+                        const res = await fetch(APPS_SCRIPT_URL, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'text/plain' },
+                            body: JSON.stringify({ action: 'proxyGemini', model: judgeModelId, promptText: prompt })
+                        });
+                        const rawText = await res.text();
+                        let data;
+                        try { data = JSON.parse(rawText); } catch(e) { return null; }
+                        const text = window.Core.CleanResponseText(data);
+                        const rankMatch = text.match(/\[(.*?)\]/);
+                        const reasonMatch = text.split('| Reason:')[1] || "AI-Judged order based on internal benchmarks.";
+                        if (rankMatch) {
+                            const rankedArray = rankMatch[1].split(',').map(s => s.trim().replace(/['"]/g, ''));
+                            const cleanRanked = rankedArray.filter(name => candidateList.includes(name));
+                            const finalRanked = [...cleanRanked, ...candidateList.filter(name => !cleanRanked.includes(name))];
+                            return { ranked: finalRanked, reason: reasonMatch };
+                        }
+                        return null;
+                    } catch (e) { return null; }
+                }
+            },
+
+
             BatchAnalyzeResponses: async (transcript, questions, studentResponses) => {
                 const prompt = `
                     Analyze these student responses for a Biogeography course based on the lecture transcript.
@@ -399,19 +455,21 @@
 
                     Task:
                     Review each question and student response. For EACH question, provide:
-                    1. "critique": A concise diagnostic feedback of what was right or what could be improved in the student's answer.
-                    2. "model_answer": The ideal model answer strictly based on the lecture transcript.
-                    3. "timestamp": The exact timestamp (e.g. "12:45") from the lecture transcript where the answer is found.
-                    4. "joker_mode": Randomly choose either "FACTUAL" or "CHALLENGE".
-                    5. "joker_statement": A short dialogue spoken by "Joker" (a confident peer testing the student's critical thinking):
+                    1. "grade": A number (1-5) evaluating the student response.
+                    2. "critique": A concise critique of what was right/wrong with the student's answer.
+                    3. "model_answer": The ideal model answer strictly based on the lecture transcript.
+                    4. "timestamp": The exact timestamp (e.g. "12:45") from the lecture transcript where the answer is found.
+                    5. "joker_mode": Randomly choose either "FACTUAL" or "CHALLENGE".
+                    6. "joker_statement": A short dialogue spoken by "Joker" (a confident peer testing the student's critical thinking):
                        - If joker_mode is "FACTUAL": Paraphrase the model answer accurately in peer tone (e.g. "If I remember correctly from the video, [accurate fact]. Do you agree with this?").
                        - If joker_mode is "CHALLENGE": Present a subtle conceptual oversight/misconception derived from the model answer that sounds plausible but is factually incorrect (e.g. "If I remember correctly from the video, [plausible misconception]. Do you agree with this?").
-                    6. "joker_feedback_correct": Short peer dialogue (1-2 sentences) when the student gives the correct judgment (Agreed if FACTUAL, or Disagreed if CHALLENGE). E.g. "Spot on! You got it right..." or "Nice catch! You didn't fall for the trap! In the video...".
-                    7. "joker_feedback_incorrect": Short peer dialogue (1-2 sentences) when the student gives the incorrect judgment (Disagreed if FACTUAL, or Agreed if CHALLENGE). E.g. "Gotcha! You fell for the trap! Actually, ..." or "Nope, that was actually true based on the video!".
+                    7. "joker_feedback_correct": Short peer dialogue (1-2 sentences) when the student gives the correct judgment (Agreed if FACTUAL, or Disagreed if CHALLENGE). E.g. "Spot on! You got it right..." or "Nice catch! You didn't fall for the trap! In the video...".
+                    8. "joker_feedback_incorrect": Short peer dialogue (1-2 sentences) when the student gives the incorrect judgment (Disagreed if FACTUAL, or Agreed if CHALLENGE). E.g. "Gotcha! You fell for the trap! Actually, ..." or "Nope, that was actually true based on the video!".
 
                     Output MUST be a STRICT JSON array of objects:
                     [
                       {
+                        "grade": 4,
                         "critique": "...",
                         "model_answer": "...",
                         "timestamp": "12:45",
@@ -443,7 +501,7 @@
                     if (msg.toLowerCase().includes("quota") || msg.toLowerCase().includes("limit") || msg.includes("429")) {
                         throw e; // Propagate Quota errors to trigger Lock
                     }
-                    return questions.map(() => ({ critique: "Analysis failed", model_answer: "N/A" }));
+                    return questions.map(() => ({ grade: 1, critique: "Analysis failed", model_answer: "N/A" }));
                 }
             },
             VerifyStudentEmail: async (email) => {
@@ -479,15 +537,16 @@
                     return { status: 'error', message: err.toString() };
                 }
             },
-            RegisterCompletion: async (email, chapter, uniqueCode, reportContent) => {
+            RegisterCompletion: async (email, chapter, uniqueCode, reportContent, finalGrade) => {
                 const scriptUrl = 'https://script.google.com/macros/s/AKfycbz5z-WPUT6f5hNGzXVSwVnPtndmNCA_QLMegG4ZiPtmyCz2ctPF6XOkCrfOxXoe59JvTA/exec';
                 const payload = {
-                    action: 'submitReportEmail',
+                    action: 'registerCompletion',
                     email: email,
                     studentId: email,
                     chapter: chapter,
                     uniqueCode: uniqueCode,
-                    reportContent: reportContent
+                    reportContent: reportContent,
+                    finalGrade: finalGrade
                 };
                 try {
                     const response = await fetch(scriptUrl, {
@@ -542,7 +601,259 @@
             user: { name: "Student", emoji: "👤", avatarClass: "" }
         };
 
+        const Roadmap = ({ roadmapData }) => {
+            if (!roadmapData) return null;
+
+            const chGrades = {
+                1: 'F', 2: 'F', 3: 'F', 4: 'F', 5: 'D-',
+                6: 'D', 7: 'D+', 8: 'C-', 9: 'C', 10: 'C+',
+                11: 'B-', 12: 'B', 13: 'B+'
+            };
+
+            const vGrades = { 6: 'A-', 8: 'A', 10: 'A+' };
+
+            const isDone = (num, type = 'Chapter') => {
+                const padded = num.toString().padStart(2, '0');
+                // Check multiple variations of the key
+                return !!(roadmapData[`${type} ${padded}`] ||
+                    roadmapData[`${type.toLowerCase()} ${padded}`] ||
+                    roadmapData[`${type} ${num}`]);
+            };
+
+            const chCount = Object.keys(roadmapData).filter(k => k.toLowerCase().includes('chapter') && roadmapData[k]).length;
+            const vCount = Object.keys(roadmapData).filter(k => k.toLowerCase().includes('video') && roadmapData[k]).length;
+
+            return (
+                <div className="roadmap-container-v2">
+                    <div className="roadmap-subtitle-v2">
+                        This <span className="legend-badge-v2">✓</span> indicates your completion so far.
+                    </div>
+
+                    <div className="section-header-v2">Weekly Q&A reports</div>
+
+                    <div className="roadmap-row-v2">
+                        <div className="label-column-v2">
+                            <span className="label-small-v2">If you submit this number of</span>
+                            <span className="label-large-v2">chapters &rarr;</span>
+                        </div>
+                        <div className="items-grid-v2">
+                            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13].map(num => (
+                                <div key={num} className={`ch-box-v2 ${isDone(num) ? 'completed-v2' : ''}`}>
+                                    {num}
+                                    {isDone(num) && <span className="tickmark-v2">✓</span>}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="roadmap-row-v2">
+                        <div className="label-column-v2">
+                            <span className="label-small-v2">your</span>
+                            <span className="label-large-v2">grade is &rarr;</span>
+                        </div>
+                        <div className="items-grid-v2">
+                            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13].map(num => (
+                                <div key={num} className={`gr-circle-v2 ${num <= chCount ? 'completed-v2' : ''}`}>
+                                    {chGrades[num]}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="roadmap-spacer-v2"></div>
+
+                    <div className="section-header-v2">Final Video Exams</div>
+
+                    <div className="roadmap-row-v2">
+                        <div className="label-column-v2">
+                            <span className="label-small-v2">If you submit this number of</span>
+                            <span className="label-large-v2">videos &rarr;</span>
+                        </div>
+                        <div className="items-grid-v2">
+                            {[6, 8, 10].map(num => (
+                                <div key={num} className={`ch-box-v2 ${vCount >= num ? 'completed-v2' : ''}`}>
+                                    {num}
+                                    {vCount >= num && <span className="tickmark-v2">✓</span>}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="roadmap-row-v2">
+                        <div className="label-column-v2">
+                            <span className="label-small-v2">your</span>
+                            <span className="label-large-v2">grade is &rarr;</span>
+                        </div>
+                        <div className="items-grid-v2">
+                            {[6, 8, 10].map(num => (
+                                <div key={num} className={`gr-circle-v2 ${vCount >= num ? 'completed-v2' : ''}`}>
+                                    {vGrades[num]}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const DiscoveryOverlay = ({ apiKeys, onComplete }) => {
+            const [status, setStatus] = React.useState('discovering'); // 'discovering', 'probing', 'judging', 'complete'
+            const [discovered, setDiscovered] = React.useState([]);
+            const [probedIndices, setProbedIndices] = React.useState({}); // { index: 'testing'|'active'|'restricted' }
+            const [activeModels, setActiveModels] = React.useState([]);
+            const [finalChain, setFinalChain] = React.useState([]);
+            const [verdict, setVerdict] = React.useState(null);
+            const [error, setError] = React.useState(null);
+            const listRef = React.useRef(null);
+
+            React.useEffect(() => {
+                const runDiscovery = async () => {
+                    if (!apiKeys || apiKeys.length === 0) {
+                        setError("No API Keys provided for discovery.");
+                        return;
+                    }
+                    const key = apiKeys[0].key; // Use primary key for judge/probe
+
+                    try {
+                        // 1. DISCOVER (Gemini Flash & Gemma models)
+                        const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${key}`;
+                        const response = await fetch(url);
+                        const data = await response.json();
+                        const raw = data.models || [];
+                        const pruned = raw.filter(m => {
+                            const id = m.name.toLowerCase();
+                            return m.supportedGenerationMethods.includes('generateContent') &&
+                                   (id.includes('flash') || id.includes('gemma')) &&
+                                   !id.includes('embedding') &&
+                                   !id.includes('aqa') &&
+                                   !id.includes('rag');
+                        });
+                        setDiscovered(pruned);
+                        setStatus('probing');
+
+                        // 2. PROBE
+                        const activeList = [];
+                        for (let i = 0; i < pruned.length; i++) {
+                            const id = pruned[i].name.split('/').pop();
+                            setProbedIndices(prev => ({ ...prev, [i]: 'testing' }));
+
+                            // Auto-scroll to the item being tested
+                            if (listRef.current && listRef.current.children[i]) {
+                                listRef.current.children[i].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                            }
+
+                            const res = await window.Core.Discovery.probeModel(id, key);
+                            if (res.active) {
+                                setProbedIndices(prev => ({ ...prev, [i]: 'active' }));
+                                activeList.push(id);
+                            } else {
+                                setProbedIndices(prev => ({ ...prev, [i]: 'restricted' }));
+                            }
+                        }
+
+                        if (activeList.length === 0) {
+                            setError("All discovered models are currently restricted (0/0 quota). Please check your Google AI account status.");
+                            return;
+                        }
+
+                        setActiveModels(activeList);
+                        setStatus('judging');
+
+                        // 3. JUDGE
+                        const judgeId = activeList.find(id => id.includes('pro')) || activeList[0];
+                        const ranking = await window.Core.Discovery.getAiRanking(judgeId, activeList, key);
+
+                        const finalOrder = ranking ? ranking.ranked : activeList;
+                        setFinalChain(finalOrder);
+                        setVerdict(ranking ? ranking.reason : "Ranked based on model family hierarchy.");
+
+                        // 4. PERSIST
+                        localStorage.setItem('iStudy_active_chain', JSON.stringify(finalOrder));
+                        localStorage.setItem('iStudy_judge_verdict', ranking ? ranking.reason : "");
+                        setStatus('complete');
+
+                    } catch (err) {
+                        console.error("Discovery Error:", err);
+                        setError("Connection failed. Check your internet or API key.");
+                    }
+                };
+
+                runDiscovery();
+            }, []);
+
+            if (error) {
+                return (
+                    <div className="discovery-overlay">
+                        <div className="discovery-modal" style={{ textAlign: 'center' }}>
+                            <div className="discovery-title" style={{ color: '#ef4444' }}>System Error</div>
+                            <p className="discovery-subtitle">{error}</p>
+                            <button className="discovery-btn" onClick={() => window.location.reload()}>Retry</button>
+                        </div>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="discovery-overlay">
+                    <div className="discovery-modal">
+                        <div className="discovery-title">Selecting Gemma AI Models</div>
+                        <p className="discovery-subtitle">
+                            {status === 'discovering' && "Finding available Gemma models from your account..."}
+                            {status === 'probing' && "Testing Gemma models. This is done only once but it may take a minute..."}
+                            {status === 'judging' && "Ranking Gemma models by capability..."}
+                            {status === 'complete' && "Gemma model chain set!"}
+                        </p>
+
+                        <div className="discovery-list" ref={listRef}>
+                            {discovered.map((m, i) => {
+                                const id = m.name.split('/').pop();
+                                const probeStatus = probedIndices[i] || 'testing';
+                                return (
+                                    <div key={i} className="discovery-item" style={{ opacity: probeStatus === 'restricted' ? 0.4 : 1 }}>
+                                        <span>{id}</span>
+                                        <span className={`discovery-status ${probeStatus}`}>
+                                            {probeStatus === 'testing' && "Testing..."}
+                                            {probeStatus === 'active' && "✅ Active"}
+                                            {probeStatus === 'restricted' && "❌ Restricted"}
+                                        </span>
+                                    </div>
+                                );
+                            })}
+                        </div>
+
+                        {status === 'complete' && (
+                            <div className="final-chain-box">
+                                <div className="final-chain-header">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                                    Active Chain Verified
+                                </div>
+                                {finalChain.slice(0, 3).map((id, i) => (
+                                    <div key={i} className="final-chain-item">
+                                        <span>#{i + 1} <strong>{id}</strong></span>
+                                        <span style={{ fontSize: '0.65rem' }}>{i === 0 ? "Primary" : "Fallback"}</span>
+                                    </div>
+                                ))}
+                                {verdict && <div className="verdict-text"><strong>AI Verdict:</strong> {verdict}</div>}
+                            </div>
+                        )}
+
+                        {status === 'complete' && (
+                            <div className="discovery-footer">
+                                <button className="discovery-btn" onClick={() => onComplete(finalChain)}>Proceed to Class</button>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
         function App() {
+            const [showSettings, setShowSettings] = React.useState(false);
+            const [apiKey, setApiKey] = React.useState(''); // Legacy check
+            const [apiKeys, setApiKeys] = React.useState([]); // New: List of { key, label }
+            const [newKeyLabel, setNewKeyLabel] = React.useState('');
+            const [tempKey, setTempKey] = React.useState('');
+            const [extraKeys, setExtraKeys] = React.useState([]); // For dynamic inputs
             const [email1, setEmail1] = useState('');
             const [email2, setEmail2] = useState('');
             const [isEditing, setIsEditing] = useState(false);
@@ -550,6 +861,7 @@
             const [isVerifyingEmail, setIsVerifyingEmail] = useState(false);
             const [isWaitingForOTP, setIsWaitingForOTP] = useState(false);
             const retryRequestRef = useRef(null); // For Auto-Retry Logic
+            const [roadmapData, setRoadmapData] = useState(null);
             const [view, setView] = useState('landing');
             const [messages, setMessages] = useState([]);
             const [inputValue, setInputValue] = useState('');
@@ -567,11 +879,13 @@
             const [isWaitingForIntroDisclaimer, setIsWaitingForIntroDisclaimer] = useState(false);
             const [isSystemLocked, setIsSystemLocked] = useState(false);
             const [lastUserInput, setLastUserInput] = useState('');
+            const [isPendingUpload, setIsPendingUpload] = useState(false);
             const [isSubmitting, setIsSubmitting] = useState(false);
             const [isWaitingForBriefing, setIsWaitingForBriefing] = useState(false);
 
-            // Model Chain States
+            // Discovery States
             const DEFAULT_MODEL_CHAIN = ['gemini-3.1-flash-lite', 'gemini-3.5-flash-lite', 'gemma-4-26b-a4b-it', 'gemma-4-31b-it'];
+            const [isDiscovering, setIsDiscovering] = useState(false);
             const [activeChain, setActiveChain] = useState(DEFAULT_MODEL_CHAIN);
 
             // Video Portal Verification States
@@ -710,10 +1024,19 @@
                     localStorage.setItem('iStudy_preferred_model', 'gemini-3.1-flash-lite');
                     setActiveChain(DEFAULT_MODEL_CHAIN);
                 }
+
+                // Load API Keys
+                const rawKeys = localStorage.getItem('google_api_key');
+                if (rawKeys) {
+                    try {
+                        const parsed = JSON.parse(rawKeys);
+                        setApiKeys(Array.isArray(parsed) ? parsed : [{ key: rawKeys, label: 'Default' }]);
+                    } catch (e) { }
+                }
             }, []);
 
             const proceedToUploadOrBriefing = () => {
-                if (submission.student_email) {
+                if (submission.student_email && roadmapData) {
                     fileInputRef.current.click();
                 } else {
                     setView('chat');
@@ -723,6 +1046,7 @@
             };
 
             const handleUploadClick = () => {
+                if (isDiscovering) return;
                 proceedToUploadOrBriefing();
             };
 
@@ -821,7 +1145,7 @@
                         student_response: responses[i],
                         initial_response: responses[i],
                         final_response: responses[i],
-                        analysis: analysisResults[i] || { critique: "Analysis failed", model_answer: "N/A" }
+                        analysis: analysisResults[i] || { grade: 0, critique: "Analysis failed", model_answer: "N/A" }
                     }));
 
                     setSubmission(prev => ({
@@ -832,8 +1156,17 @@
                         status: 'reviewing'
                     }));
 
-                    addMessage('system', "This review may take up to 60 minutes, ensure you have that time available until you finish, as partial work cannot be saved. Ready to begin?");
-                    setIsWaitingForReviewStart(true);
+                    const chaptersCompleted = roadmapData ? Object.keys(roadmapData).filter(k =>
+                        (k.toLowerCase().includes('chapter') || k.toLowerCase().includes('video')) && roadmapData[k]
+                    ).length : 0;
+
+                    if (chaptersCompleted < 4) {
+                        addMessage('system', "This review may take up to 60 minutes, ensure you have that time available until you finish, as partial work cannot be saved. Ready to begin?");
+                        setIsWaitingForReviewStart(true);
+                    } else {
+                        addMessage('system', "Remember we need at least 60 minutes to finish reviewing your responses. Ready to begin?");
+                        setIsWaitingForReviewStart(true);
+                    }
 
                     setCurrentQIndex(0);
                     setReviewStep(0);
@@ -873,6 +1206,12 @@
                 // Removed the greedy update that was overwriting final_response with conversational 'Yes/No' messages.
                 // Newton's phase (Step 0) now explicitly handles the final_response lock-in.
 
+                // NEW: Skip introductions if any chapter/video is already completed
+                const chaptersCompleted = roadmapData ? Object.keys(roadmapData).filter(k =>
+                    (k.toLowerCase().includes('chapter') || k.toLowerCase().includes('video')) && roadmapData[k]
+                ).length : 0;
+                const skipIntro = chaptersCompleted >= 4;
+
                 // LIGHTWEIGHT CONTEXT - Uses Pre-calc Model Answer instead of full Transcript
                 const analysis = q.analysis || {};
                 const commonContext = {
@@ -881,7 +1220,7 @@
                     student_response: studentMsg || q.final_response || q.student_response
                 };
 
-                // STEP 0: NEWTON (Feedback & Model Answer) -> TONTIN INTRO
+                // STEP 0: NEWTON (Grades & Feedback) -> TONTIN INTRO
                 // STEP 0: NEWTON (Structured Report & Discussion)
                 if (step === 0) {
                     if (!studentMsg) {
@@ -893,17 +1232,20 @@ ${q.question_text}
 #### Your Response:
 ${q.student_response}
 
+#### Score:
+${analysis.grade}/5
+
 #### Feedback:
 ${analysis.critique}
 
-#### Model Answer (AI):
+#### Model Answer(AI):
 ${analysis.model_answer}
 
 ${analysis.timestamp ? `***I found this response around minute ${analysis.timestamp} of the video.***` : ''}
                         `;
                         addMessage('newton', report);
                         setTimeout(() => {
-                            addMessage('newton', "Do you agree with this assessment? (Type **'Yes'** to accept the Model Answer, or provide an updated explanation/argument to incorporate missing details.)");
+                            addMessage('newton', "Do you agree with this assessment? (Type **'Yes'** to accept the Model Answer, or provide a better explanation/argument to improve your score.)");
                             setIsProcessing(false);
                         }, 1000);
                         return;
@@ -913,7 +1255,7 @@ ${analysis.timestamp ? `***I found this response around minute ${analysis.timest
                         if (lowerMsg === 'yes' || lowerMsg === 'agree' || lowerMsg === 'ok' || lowerMsg.includes('accept')) {
                             setSubmission(prev => {
                                 const newQs = [...prev.questions];
-                                newQs[qIdx] = { ...newQs[qIdx], final_response: analysis.model_answer };
+                                newQs[qIdx] = { ...newQs[qIdx], final_response: analysis.model_answer, final_grade: analysis.grade };
                                 return { ...prev, questions: newQs };
                             });
                             setReviewStep(1);
@@ -1224,8 +1566,11 @@ I could not make sense of what you wrote.
                     if (res.status === 'success') {
                         setIsWaitingForOTP(false);
                         setVerificationCode(text);
-                        addMessage('system', "✅ **Verification successful! Welcome back.** Please click the button below to upload your response sheet and begin.");
-                        addMessage('system', '', 'upload_action');
+                        setRoadmapData(res.completion);
+                        addMessage('system', "Verification successful! Welcome back. Generating your progress roadmap...");
+                        setTimeout(() => {
+                            addMessage('system', '', 'roadmap');
+                        }, 1000);
                     } else {
                         addMessage('system', "❌ **Invalid Code.** The verification code you entered is incorrect. Please check your email and try again.");
                     }
@@ -1351,6 +1696,79 @@ I could not make sense of what you wrote.
                     fileName
                 };
             };
+
+            const saveKeysToStorage = (keys) => {
+                localStorage.setItem('google_api_key', JSON.stringify(keys));
+                setApiKeys(keys);
+                if (keys.length > 0) setApiKey(keys[0].key); // Legacy compatibility
+                else setApiKey('');
+            };
+
+            const handleAddKeys = async () => {
+                const inputs = [tempKey, ...extraKeys].filter(k => k && k.trim().length > 10);
+                if (inputs.length === 0) {
+                    setShowSettings(false);
+                    return;
+                }
+
+                const newEntries = inputs.map((k, i) => ({
+                    key: k.trim(),
+                    label: `Account ${apiKeys.length + i + 1}`
+                }));
+
+                const newParams = [...apiKeys, ...newEntries];
+                saveKeysToStorage(newParams);
+
+                setTempKey('');
+                setExtraKeys([]);
+
+                // CLOSE MODAL AND START DISCOVERY
+                setShowSettings(false);
+                setIsDiscovering(true); // Trigger intelligence optimization after key save
+
+                // AUTO-RETRY if Locked
+                if (isSystemLocked && retryRequestRef.current) {
+                    addMessage('system', "🔄 New key detected. Retrying previous step...");
+                    setIsSystemLocked(false); // Optimistic Unlock
+
+                    if (retryRequestRef.current.type === 'BATCH') {
+                        const { transcript, questions, responses, chapterNum } = retryRequestRef.current.payload;
+                        runBatchAnalysis(transcript, questions, responses, chapterNum);
+                    } else if (retryRequestRef.current.type === 'CHAPTER_SELECT') {
+                        const { chapterNum } = retryRequestRef.current.payload;
+                        handleChapterSelected(chapterNum);
+                    } else {
+                        // Default to CHAT
+                        runNextStep(currentQIndex, reviewStep, lastUserInput);
+                    }
+                }
+            };
+
+            const handleRemoveKey = (index) => {
+                const newParams = apiKeys.filter((_, i) => i !== index);
+                saveKeysToStorage(newParams);
+            };
+
+            // Load saved key on mount
+            React.useEffect(() => {
+                const raw = localStorage.getItem('google_api_key');
+                if (raw) {
+                    try {
+                        const parsed = JSON.parse(raw);
+                        if (Array.isArray(parsed)) {
+                            setApiKeys(parsed);
+                            if (parsed.length > 0) setApiKey(parsed[0].key);
+                        } else {
+                            // Legacy String
+                            setApiKeys([{ key: raw, label: 'Default' }]);
+                            setApiKey(raw);
+                        }
+                    } catch {
+                        setApiKeys([{ key: raw, label: 'Default' }]);
+                        setApiKey(raw);
+                    }
+                }
+            }, []);
 
             // Auto-scroll to bottom when new messages arrive
             const messagesEndRef = React.useRef(null);
@@ -1568,18 +1986,43 @@ I could not make sense of what you wrote.
                                                                                 // 2. Wait a brief moment to ensure Safari handles the download start
                                                                                 await new Promise(res => setTimeout(res, 800));
 
-                                                                                // 3. Send the completion report via email relay
+                                                                                // 3. Then send the data to Google Sheets & Email
+                                                                                // Calculate standing grade (Chapters + Videos)
+                                                                                const gradesMap = { 1: 'F', 2: 'F', 3: 'F', 4: 'F', 5: 'D-', 6: 'D', 7: 'D+', 8: 'C-', 9: 'C', 10: 'C+', 11: 'B-', 12: 'B', 13: 'B+' };
+
+                                                                                const padded = submission.chapter.toString().padStart(2, '0');
+                                                                                const isAlreadyDone = roadmapData && (roadmapData[`Chapter ${padded}`] || roadmapData[`chapter ${padded}`] || roadmapData[`Chapter ${submission.chapter}`]);
+
+                                                                                let chCount = Object.keys(roadmapData || {}).filter(k => k.toLowerCase().includes('chapter') && roadmapData[k]).length;
+                                                                                if (!isAlreadyDone) chCount += 1;
+                                                                                if (chCount > 13) chCount = 13;
+
+                                                                                const vCount = Object.keys(roadmapData || {}).filter(k => k.toLowerCase().includes('video') && roadmapData[k]).length;
+
+                                                                                let newGrade = gradesMap[chCount] || 'F';
+                                                                                if (vCount >= 10) newGrade = 'A+';
+                                                                                else if (vCount >= 8) newGrade = 'A';
+                                                                                else if (vCount >= 6) newGrade = 'A-';
+
                                                                                 const res = await window.Core.RegisterCompletion(
                                                                                     submission.student_email,
                                                                                     submission.chapter,
                                                                                     uniqueCode,
-                                                                                    r.content
+                                                                                    r.content,
+                                                                                    newGrade
                                                                                 );
 
                                                                                 if (res && res.status === 'success') {
+                                                                                    // Update local roadmap data so the scoreboard reflects completion immediately
+                                                                                    const padded = submission.chapter.toString().padStart(2, '0');
+                                                                                    setRoadmapData(prev => ({
+                                                                                        ...prev,
+                                                                                        [`Chapter ${padded}`]: true
+                                                                                    }));
+
                                                                                     setView('completion');
                                                                                 } else {
-                                                                                    addMessage('system', "❌ **Submission Failed:** " + (res.message || "Unknown error sending completion report."));
+                                                                                    addMessage('system', "❌ **Submission Failed:** " + (res.message || "Unknown error connecting to Google Sheets."));
                                                                                 }
                                                                             } catch (err) {
                                                                                 console.error("Submission error:", err);
@@ -1638,6 +2081,19 @@ I could not make sense of what you wrote.
                                                                     setIsVerifyingEmail(true);
                                                                 }}>Click to start</button>
                                                             </div>
+                                                        ) : msg.type === 'roadmap' ? (
+                                                            <div className="roadmap-wrapper">
+                                                                <Roadmap roadmapData={roadmapData} />
+                                                                <div style={{ marginTop: '20px' }}>
+                                                                    <button
+                                                                        className="main-upload-btn"
+                                                                        style={{ fontSize: '16px', padding: '12px 24px', width: 'auto' }}
+                                                                        onClick={() => fileInputRef.current.click()}
+                                                                    >
+                                                                        <span className="btn-icon">📂</span> Upload weekly Q&A report
+                                                                    </button>
+                                                                </div>
+                                                            </div>
                                                         ) : msg.type === 'upload_action' ? (
                                                             <div className="action-card" style={{ textAlign: 'center', padding: '10px 0' }}>
                                                                 <button
@@ -1690,8 +2146,12 @@ I could not make sense of what you wrote.
                                     <div className="success-icon">✓</div>
                                     <h2>Chapter {submission.chapter} Complete!</h2>
                                     <p>
-                                        Your <strong>revised</strong> responses have been saved to your local machine and your completion report has been delivered to Dr. Mora.
+                                        Your <strong>revised</strong> responses have been saved to your local machine.
                                     </p>
+
+                                    <div style={{ width: '100%', maxWidth: '600px', margin: '0 auto 40px auto', padding: '20px', background: '#f8fafc', borderRadius: '20px', border: '1px solid #e2e8f0' }}>
+                                        <Roadmap roadmapData={roadmapData} />
+                                    </div>
 
                                     <button className="btn-primary" onClick={() => window.location.reload()}>
                                         Close App
@@ -1821,6 +2281,25 @@ I could not make sense of what you wrote.
                                     </div>
                                 )}
                             </div>
+                        )
+                    }
+                    {
+                        isDiscovering && (
+                            <DiscoveryOverlay
+                                apiKeys={apiKeys}
+                                onComplete={(newChain) => {
+                                    setActiveChain(newChain);
+                                    setIsDiscovering(false);
+                                    if (newChain.length > 0) {
+                                        setSelectedModel(newChain[0]);
+                                        localStorage.setItem('iStudy_preferred_model', newChain[0]);
+                                    }
+                                    if (isPendingUpload) {
+                                        setIsPendingUpload(false);
+                                        proceedToUploadOrBriefing();
+                                    }
+                                }}
+                            />
                         )
                     }
                     {showVideoModal && (
