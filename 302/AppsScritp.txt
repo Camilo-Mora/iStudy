@@ -41,7 +41,7 @@ function doPost(e) {
       return verifyOTP(data.email, data.otp);
     } else if (action === "proxyGemini") {
       return proxyGemini(data.model, data.promptText);
-    } else if (action === "submitReportEmail") {
+    } else if (action === "submitReportEmail" || action === "registerCompletion") {
       return submitReportEmail(data.email, data.chapter, data.uniqueCode, data.reportContent);
     } else if (action === "submitVideoPortfolioEmail") {
       return submitVideoPortfolioEmail(data.email, data.videos);
